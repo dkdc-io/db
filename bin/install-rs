@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+echo "Installing db CLI..."
+cargo install --path crates/dkdc-db-cli
+echo "Install complete!"

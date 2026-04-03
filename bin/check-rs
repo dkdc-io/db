@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+echo "Checking Rust formatting..."
+cargo fmt -- --check
+
+echo "Running clippy..."
+cargo clippy -- -D warnings
+
+echo "Running Rust tests..."
+cargo test
+
+echo "Rust checks passed!"

@@ -1,0 +1,23 @@
+[package]
+name = "dkdc-db-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Cody <cody@dkdc.io>"]
+description = "CLI for dkdc-db: REPL, query, and admin commands"
+license = "MIT"
+repository = "https://github.com/dkdc-io/dkdc-db"
+
+[[bin]]
+name = "db"
+path = "src/main.rs"
+
+[dependencies]
+dkdc-db-core = { path = "../dkdc-db-core" }
+dkdc-home = { path = "../../../dkdc-home/crates/dkdc-home" }
+clap = { version = "4", features = ["derive"] }
+rustyline = "15"
+tokio = { version = "1", features = ["full"] }
+arrow = { version = "58", features = ["prettyprint"] }
+tracing-subscriber = "0.3"
+anyhow = "1"

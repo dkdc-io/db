@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "crates/dkdc-db-core",
+    "crates/dkdc-db-cli",
+]
+resolver = "2"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
