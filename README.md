@@ -4,7 +4,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/dkdc-io/db/ci.yml?branch=main&label=CI)](https://github.com/dkdc-io/db/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8A2BE2.svg)](https://github.com/dkdc-io/db/blob/main/LICENSE)
 
-HTAP embedded database: libSQL writes + DataFusion reads.
+Embedded HTAP database system.
 
 ## Install
 
