@@ -14,7 +14,9 @@ permissions:
 
 jobs:
   check:
-    uses: ./.github/workflows/check.yml
+    uses: dkdc-io/.github/.github/workflows/check.yml@v1
+    with:
+      python: false
 
   build:
     name: Build (${{ matrix.target }})
