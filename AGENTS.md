@@ -1,6 +1,6 @@
 # dkdc-db
 
-HTAP embedded database: writes enforced via libSQL, reads via DataFusion on a WAL-mode replica connection. Client/server architecture — all access goes through the REST API.
+HTAP embedded database: writes enforced via turso, reads via DataFusion on a WAL-mode replica connection. Client/server architecture — all access goes through the REST API.
 
 ## architecture
 
@@ -15,7 +15,7 @@ crates/
 - Server owns the database file, wraps dkdc-db-core
 - Client talks to server over REST (JSON), never touches SQLite directly
 - Tmux pattern (via `dkdc-sh`): `db serve` launches the server in a tmux session (`dkdc-db`), `db stop/attach/logs/status` manage it. `db serve --foreground` skips tmux (used by tmux itself).
-- Writes go through libSQL (single read-write connection)
+- Writes go through turso (single read-write connection)
 - Reads go through DataFusion (SessionContext + SqliteTableProvider)
 - Same database file, WAL mode enables concurrent reader + writer
 - Schema auto-refreshes after DDL statements
@@ -26,7 +26,7 @@ crates/
 ```
 POST /execute        { "sql": "..." }  → { "affected": N }
 POST /query          { "sql": "..." }  → { "columns": [...], "rows": [...] }
-POST /query/libsql   { "sql": "..." }  → { "columns": [...], "rows": [...] }
+POST /query/turso    { "sql": "..." }  → { "columns": [...], "rows": [...] }
 GET  /tables                           → ["table1", "table2"]
 GET  /schema/:table                    → { "columns": [...], "rows": [...] }
 GET  /health                           → { "status": "ok" }
@@ -56,5 +56,5 @@ Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 - No `unwrap()` in library code, all errors via `Result`
 - `execute()` for writes only, `query()` for reads only (enforced)
 - `query()` always routes through DataFusion
-- `query_libsql()` for explicit libSQL fast path
+- `query_turso()` for explicit turso fast path
 - Client requires server running; all access through HTTP API

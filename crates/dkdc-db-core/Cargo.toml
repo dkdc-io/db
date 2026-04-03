@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
-description = "HTAP embedded database: libSQL writes + DataFusion reads"
+description = "HTAP embedded database: turso writes + DataFusion reads"
 license = "MIT"
 repository = "https://github.com/dkdc-io/db"
 
 [dependencies]
 dkdc-home = "0.1"
-libsql = { version = "0.9", default-features = false, features = ["core", "replication"] }
+turso = "0.5"
 datafusion = "53"
 arrow = { version = "58", features = ["prettyprint"] }
 tokio = { version = "1", features = ["sync", "rt"] }

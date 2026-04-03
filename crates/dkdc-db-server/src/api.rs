@@ -14,7 +14,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/execute", post(execute))
         .route("/query", post(query))
-        .route("/query/libsql", post(query_libsql))
+        .route("/query/turso", post(query_turso))
         .route("/tables", get(list_tables))
         .route("/schema/{table}", get(table_schema))
         .route("/health", get(health))
@@ -125,11 +125,8 @@ async fn query(State(db): State<AppState>, Json(req): Json<SqlRequest>) -> impl 
     }
 }
 
-async fn query_libsql(
-    State(db): State<AppState>,
-    Json(req): Json<SqlRequest>,
-) -> impl IntoResponse {
-    match db.query_libsql(&req.sql).await {
+async fn query_turso(State(db): State<AppState>, Json(req): Json<SqlRequest>) -> impl IntoResponse {
+    match db.query_turso(&req.sql).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
     }
@@ -147,7 +144,7 @@ async fn table_schema(State(db): State<AppState>, Path(table): Path<String>) -> 
         "SELECT name, type FROM pragma_table_info('{}')",
         table.replace('\'', "''")
     );
-    match db.query_libsql(&sql).await {
+    match db.query_turso(&sql).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
     }

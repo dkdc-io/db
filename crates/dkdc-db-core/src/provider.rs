@@ -15,15 +15,15 @@ use crate::plan::SqliteScanExec;
 pub struct SqliteTableProvider {
     table_name: String,
     schema: SchemaRef,
-    conn: libsql::Connection,
+    db: turso::Database,
 }
 
 impl SqliteTableProvider {
-    pub fn new(table_name: String, schema: SchemaRef, conn: libsql::Connection) -> Self {
+    pub fn new(table_name: String, schema: SchemaRef, db: turso::Database) -> Self {
         Self {
             table_name,
             schema,
-            conn,
+            db,
         }
     }
 }
@@ -61,7 +61,7 @@ impl TableProvider for SqliteTableProvider {
             self.table_name.clone(),
             self.schema.clone(),
             projection.cloned(),
-            self.conn.clone(),
+            self.db.clone(),
         )))
     }
 }

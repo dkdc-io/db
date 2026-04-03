@@ -1,0 +1,18 @@
+[package]
+name = "dkdc-db-bench"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Cody <cody@dkdc.io>"]
+description = "Network load testing for dkdc-db"
+license = "MIT"
+repository = "https://github.com/dkdc-io/db"
+publish = false
+
+[dependencies]
+dkdc-db-core = { version = "0.1", path = "../dkdc-db-core" }
+dkdc-db-server = { version = "0.1", path = "../dkdc-db-server" }
+dkdc-db-client = { version = "0.1", path = "../dkdc-db-client" }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"

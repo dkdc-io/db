@@ -67,8 +67,8 @@ async fn all_sqlite_types_roundtrip_through_arrow() {
     // null_col should be null
     assert!(batch.column(4).is_null(0));
 
-    // Verify same data via libSQL
-    let ls_batches = db.query_libsql("SELECT * FROM type_test").await.unwrap();
+    // Verify same data via turso
+    let ls_batches = db.query_turso("SELECT * FROM type_test").await.unwrap();
     assert_eq!(ls_batches.len(), 1);
     let ls_batch = &ls_batches[0];
     assert_eq!(ls_batch.num_rows(), 1);

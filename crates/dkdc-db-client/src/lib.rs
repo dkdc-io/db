@@ -97,11 +97,11 @@ impl DbClient {
         }
     }
 
-    /// Execute a read query directly through libSQL.
-    pub async fn query_libsql(&self, sql: &str) -> Result<QueryResponse> {
+    /// Execute a read query directly through turso.
+    pub async fn query_turso(&self, sql: &str) -> Result<QueryResponse> {
         let resp = self
             .client
-            .post(format!("{}/query/libsql", self.base_url))
+            .post(format!("{}/query/turso", self.base_url))
             .json(&SqlRequest {
                 sql: sql.to_string(),
             })

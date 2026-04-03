@@ -2,11 +2,11 @@ use crate::error::{Error, Result};
 use crate::router;
 
 pub struct WriteEngine {
-    conn: libsql::Connection,
+    conn: turso::Connection,
 }
 
 impl WriteEngine {
-    pub fn new(conn: libsql::Connection) -> Self {
+    pub fn new(conn: turso::Connection) -> Self {
         Self { conn }
     }
 

@@ -22,13 +22,13 @@ async fn roundtrip_write_and_read_via_both_engines() {
     let df_total: usize = df_batches.iter().map(|b| b.num_rows()).sum();
     assert_eq!(df_total, 100, "DataFusion should return 100 rows");
 
-    // Read via libSQL
+    // Read via turso
     let ls_batches = db
-        .query_libsql("SELECT * FROM users ORDER BY id")
+        .query_turso("SELECT * FROM users ORDER BY id")
         .await
         .unwrap();
     let ls_total: usize = ls_batches.iter().map(|b| b.num_rows()).sum();
-    assert_eq!(ls_total, 100, "libSQL should return 100 rows");
+    assert_eq!(ls_total, 100, "turso should return 100 rows");
 
     // Verify schemas match
     let df_schema = df_batches[0].schema();
@@ -42,7 +42,7 @@ async fn roundtrip_write_and_read_via_both_engines() {
         .await
         .unwrap();
     let ls_first = db
-        .query_libsql("SELECT id, name FROM users WHERE id = 0")
+        .query_turso("SELECT id, name FROM users WHERE id = 0")
         .await
         .unwrap();
     assert_eq!(df_first[0].num_rows(), 1);

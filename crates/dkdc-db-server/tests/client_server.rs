@@ -72,7 +72,7 @@ async fn execute_and_query_roundtrip() {
 }
 
 #[tokio::test]
-async fn query_libsql_path() {
+async fn query_turso_path() {
     let (client, _handle) = setup().await;
 
     client
@@ -84,7 +84,7 @@ async fn query_libsql_path() {
         .await
         .unwrap();
 
-    let resp = client.query_libsql("SELECT * FROM t").await.unwrap();
+    let resp = client.query_turso("SELECT * FROM t").await.unwrap();
     assert_eq!(resp.rows.len(), 1);
     assert_eq!(resp.rows[0][1], serde_json::json!("hello"));
 }
