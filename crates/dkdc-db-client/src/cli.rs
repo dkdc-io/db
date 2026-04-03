@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "db", about = "dkdc-db: HTAP embedded database")]
+#[command(name = "db-client", about = "dkdc-db client")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -9,20 +9,6 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Start the database server
-    Serve {
-        /// Database name (stored at ~/.dkdc/db/{name}.db)
-        #[arg(long, default_value = "default")]
-        db: String,
-
-        /// Host to bind to
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-
-        /// Port to bind to
-        #[arg(long, default_value_t = 4200)]
-        port: u16,
-    },
     /// Interactive SQL REPL
     Repl {
         /// Server URL

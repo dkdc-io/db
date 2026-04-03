@@ -1,0 +1,23 @@
+[package]
+name = "dkdc-db-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Cody <cody@dkdc.io>"]
+description = "dkdc-db server: REST API over the HTAP engine"
+license = "MIT"
+repository = "https://github.com/dkdc-io/dkdc-db"
+
+[dependencies]
+dkdc-db-core = { path = "../dkdc-db-core" }
+axum = { version = "0.8", features = ["json"] }
+tokio = { version = "1", features = ["net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+arrow = "58"
+base64 = "0.22"
+
+[dev-dependencies]
+dkdc-db-client = { path = "../dkdc-db-client" }
+tokio = { version = "1", features = ["full"] }

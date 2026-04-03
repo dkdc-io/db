@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "crates/dkdc-db-core",
+    "crates/dkdc-db-server",
+    "crates/dkdc-db-client",
     "crates/dkdc-db-cli",
 ]
 resolver = "2"

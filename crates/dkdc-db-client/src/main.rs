@@ -11,10 +11,6 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Serve { db, host, port } => {
-            let database = dkdc_db_core::DkdcDb::open(&db).await?;
-            dkdc_db_server::serve(database, &host, port).await?;
-        }
         Commands::Repl { url } => {
             let client = DbClient::new(&url);
             dkdc_db_client::repl::run(&client).await?;

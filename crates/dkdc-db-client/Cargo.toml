@@ -1,0 +1,32 @@
+[package]
+name = "dkdc-db-client"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Cody <cody@dkdc.io>"]
+description = "dkdc-db client: HTTP client for the dkdc-db server"
+license = "MIT"
+repository = "https://github.com/dkdc-io/dkdc-db"
+
+[[bin]]
+name = "db-client"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = ["dep:clap", "dep:rustyline", "dep:tokio", "dep:tracing-subscriber", "dep:dkdc-home", "dep:anyhow"]
+
+[dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# CLI-only deps
+clap = { version = "4", features = ["derive"], optional = true }
+rustyline = { version = "15", optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+tracing-subscriber = { version = "0.3", optional = true }
+dkdc-home = { path = "../../../dkdc-home/crates/dkdc-home", optional = true }
+anyhow = { version = "1", optional = true }
