@@ -6,7 +6,7 @@ rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
 description = "dkdc-db client: HTTP client for the dkdc-db server"
 license = "MIT"
-repository = "https://github.com/dkdc-io/dkdc-db"
+repository = "https://github.com/dkdc-io/db"
 
 [[bin]]
 name = "db-client"
@@ -28,5 +28,5 @@ clap = { version = "4", features = ["derive"], optional = true }
 rustyline = { version = "15", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
-dkdc-home = { path = "../../../dkdc-home/crates/dkdc-home", optional = true }
+dkdc-home = { version = "0.1", optional = true }
 anyhow = { version = "1", optional = true }

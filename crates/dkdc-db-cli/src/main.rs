@@ -1,7 +1,7 @@
 mod cli;
 
 use clap::Parser;
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, TMUX_SESSION};
 use dkdc_db_client::DbClient;
 
 #[tokio::main]
@@ -11,25 +11,92 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Serve { db, host, port } => {
-            let database = dkdc_db_core::DkdcDb::open(&db).await?;
-            dkdc_db_server::serve(database, &host, port).await?;
+        None => {
+            Cli::parse_from(["db", "--help"]);
         }
-        Commands::Repl { url } => {
+        Some(Commands::Serve {
+            db,
+            host,
+            port,
+            foreground,
+        }) => {
+            if foreground {
+                let database = dkdc_db_core::DkdcDb::open(&db).await?;
+                dkdc_db_server::serve(database, &host, port).await?;
+            } else {
+                if dkdc_sh::tmux::has_session(TMUX_SESSION) {
+                    anyhow::bail!("dkdc-db already running in tmux session '{TMUX_SESSION}'");
+                }
+                let cmd = format!("db serve --foreground --db {db} --host {host} --port {port}");
+                dkdc_sh::tmux::new_session(TMUX_SESSION, &cmd)?;
+                println!("dkdc-db server started in tmux session '{TMUX_SESSION}'");
+                println!();
+                println!("Commands:");
+                println!("  db attach    # View server output");
+                println!("  db logs      # Show recent logs");
+                println!("  db status    # Check server status");
+                println!("  db stop      # Stop server");
+            }
+        }
+        Some(Commands::Stop) => {
+            if !dkdc_sh::tmux::has_session(TMUX_SESSION) {
+                println!("dkdc-db is not running");
+                return Ok(());
+            }
+            dkdc_sh::tmux::kill_session(TMUX_SESSION)?;
+            println!("dkdc-db stopped");
+        }
+        Some(Commands::Status { port }) => {
+            let tmux_running = dkdc_sh::tmux::has_session(TMUX_SESSION);
+            let url = format!("http://localhost:{port}/health");
+            let http_responding = reqwest::get(&url)
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+
+            if http_responding {
+                println!("dkdc-db server is running on port {port}");
+                if tmux_running {
+                    println!("Tmux session: {TMUX_SESSION}");
+                }
+            } else if tmux_running {
+                println!("Tmux session exists but server may not be responding");
+                println!("Use: db logs");
+            } else {
+                println!("dkdc-db is not running");
+            }
+        }
+        Some(Commands::Attach) => {
+            if !dkdc_sh::tmux::has_session(TMUX_SESSION) {
+                println!("dkdc-db not running (no tmux session '{TMUX_SESSION}')");
+                println!("Use: db serve");
+                return Ok(());
+            }
+            dkdc_sh::tmux::attach(TMUX_SESSION)?;
+        }
+        Some(Commands::Logs { lines }) => {
+            if !dkdc_sh::tmux::has_session(TMUX_SESSION) {
+                println!("dkdc-db not running (no tmux session '{TMUX_SESSION}')");
+                return Ok(());
+            }
+            let output = dkdc_sh::tmux::capture_pane(TMUX_SESSION, Some(lines))?;
+            print!("{output}");
+        }
+        Some(Commands::Repl { url }) => {
             let client = DbClient::new(&url);
             dkdc_db_client::repl::run(&client).await?;
         }
-        Commands::Query { url, sql } => {
+        Some(Commands::Query { url, sql }) => {
             let client = DbClient::new(&url);
             let resp = client.query(&sql).await?;
             dkdc_db_client::repl::print_query_response(&resp);
         }
-        Commands::Execute { url, sql } => {
+        Some(Commands::Execute { url, sql }) => {
             let client = DbClient::new(&url);
             let affected = client.execute(&sql).await?;
             println!("OK ({affected} rows affected)");
         }
-        Commands::Tables { url } => {
+        Some(Commands::Tables { url }) => {
             let client = DbClient::new(&url);
             let tables = client.list_tables().await?;
             if tables.is_empty() {
@@ -40,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::List => {
+        Some(Commands::List) => {
             let db_dir = dkdc_home::ensure("db")?;
             let mut found = false;
             for entry in std::fs::read_dir(db_dir)? {

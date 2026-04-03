@@ -9,11 +9,12 @@ crates/
   dkdc-db-core/       # library: HTAP engine (DkdcDb, TableProvider, schema introspection)
   dkdc-db-server/     # binary "db-server": axum REST API wrapping core
   dkdc-db-client/     # library: HTTP client (reqwest) with same API shape
-  dkdc-db-cli/        # binary "db": REPL + commands, uses client
+  dkdc-db-cli/        # binary "db": REPL + commands, uses client + dkdc-sh for tmux
 ```
 
 - Server owns the database file, wraps dkdc-db-core
 - Client talks to server over REST (JSON), never touches SQLite directly
+- Tmux pattern (via `dkdc-sh`): `db serve` launches the server in a tmux session (`dkdc-db`), `db stop/attach/logs/status` manage it. `db serve --foreground` skips tmux (used by tmux itself).
 - Writes go through libSQL (single read-write connection)
 - Reads go through DataFusion (SessionContext + SqliteTableProvider)
 - Same database file, WAL mode enables concurrent reader + writer
@@ -37,12 +38,14 @@ Installed binaries: `db-server`, `db`.
 ## development
 
 ```bash
-bin/setup       # install rustup if needed
-bin/build       # build Rust (bin/build-rs)
-bin/check       # lint + test (bin/check-rs)
-bin/format      # auto-format (bin/format-rs)
-bin/test        # run tests (bin/test-rs)
-bin/install     # install CLI + server locally
+bin/setup              # install rustup if needed
+bin/build              # build Rust (bin/build-rs)
+bin/check              # lint + test (bin/check-rs)
+bin/format             # auto-format (bin/format-rs)
+bin/test               # run tests (bin/test-rs)
+bin/install            # install CLI + server locally
+bin/bump-version       # bump version across all crates (--major/--minor/--patch)
+bin/release-crates-io  # publish all crates to crates.io
 ```
 
 Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`

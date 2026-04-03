@@ -6,10 +6,10 @@ rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
 description = "dkdc-db server: REST API over the HTAP engine"
 license = "MIT"
-repository = "https://github.com/dkdc-io/dkdc-db"
+repository = "https://github.com/dkdc-io/db"
 
 [dependencies]
-dkdc-db-core = { path = "../dkdc-db-core" }
+dkdc-db-core = { version = "0.1", path = "../dkdc-db-core" }
 axum = { version = "0.8", features = ["json"] }
 tokio = { version = "1", features = ["net"] }
 serde = { version = "1", features = ["derive"] }
@@ -19,5 +19,5 @@ arrow = "58"
 base64 = "0.22"
 
 [dev-dependencies]
-dkdc-db-client = { path = "../dkdc-db-client" }
+dkdc-db-client = { version = "0.1", path = "../dkdc-db-client" }
 tokio = { version = "1", features = ["full"] }
