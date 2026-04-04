@@ -3,5 +3,5 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 echo "Building Rust..."
-cargo build
+cargo build "$@"
 echo "Build complete!"
