@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use dkdc_db_core::DbManager;
 use serde::{Deserialize, Serialize};
+
+/// Max request body size: 16 MB
+const MAX_BODY_SIZE: usize = 16 * 1024 * 1024;
 
 type AppState = Arc<DbManager>;
 
@@ -21,6 +24,7 @@ pub fn router(state: AppState) -> Router {
         .route("/db/{name}/schema/{table}", get(table_schema))
         .route("/query", post(query))
         .route("/health", get(health))
+        .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .with_state(state)
 }
 

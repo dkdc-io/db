@@ -50,4 +50,32 @@ mod tests {
         assert!(is_read("WITH cte AS (SELECT 1) SELECT * FROM cte"));
         assert!(!is_read("INSERT INTO t VALUES (1)"));
     }
+
+    #[test]
+    fn test_case_insensitivity() {
+        assert!(is_ddl("create table t (id int)"));
+        assert!(is_write("insert into t values (1)"));
+        assert!(is_read("select 1"));
+        assert!(is_ddl("Create Table t (id int)"));
+    }
+
+    #[test]
+    fn test_leading_whitespace() {
+        assert!(is_ddl("  \t\nCREATE TABLE t (id int)"));
+        assert!(is_write("  INSERT INTO t VALUES (1)"));
+        assert!(is_read("  SELECT 1"));
+    }
+
+    #[test]
+    fn test_pragma_is_read() {
+        assert!(is_read("PRAGMA table_info('t')"));
+        assert!(is_read("pragma table_list"));
+    }
+
+    #[test]
+    fn test_ddl_is_also_write() {
+        assert!(is_write("CREATE TABLE t (id int)"));
+        assert!(is_write("ALTER TABLE t ADD COLUMN x TEXT"));
+        assert!(is_write("DROP TABLE t"));
+    }
 }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 
-use crate::error::{Error, Result};
+use crate::error::{self, Error, Result};
 
 pub struct ColumnInfo {
     pub name: String,
@@ -36,6 +36,8 @@ pub async fn introspect_table(
     conn: &turso::Connection,
     table_name: &str,
 ) -> Result<Vec<ColumnInfo>> {
+    error::validate_table_name(table_name)?;
+    // Table name is validated above (alphanumeric + underscores only), safe for interpolation
     let sql = format!("PRAGMA table_info('{table_name}')");
     let mut rows = conn.query(&sql, ()).await?;
     let mut columns = Vec::new();
@@ -101,5 +103,80 @@ mod tests {
         assert_eq!(sqlite_type_to_arrow(Some("BLOB")), DataType::Binary);
         assert_eq!(sqlite_type_to_arrow(None), DataType::Utf8);
         assert_eq!(sqlite_type_to_arrow(Some("UNKNOWN_TYPE")), DataType::Utf8);
+    }
+
+    #[test]
+    fn test_type_mapping_case_insensitive() {
+        assert_eq!(sqlite_type_to_arrow(Some("integer")), DataType::Int64);
+        assert_eq!(sqlite_type_to_arrow(Some("Integer")), DataType::Int64);
+        assert_eq!(sqlite_type_to_arrow(Some("real")), DataType::Float64);
+        assert_eq!(sqlite_type_to_arrow(Some("text")), DataType::Utf8);
+        assert_eq!(sqlite_type_to_arrow(Some("blob")), DataType::Binary);
+    }
+
+    #[test]
+    fn test_type_mapping_compound_types() {
+        // SQLite affinity rules: INT anywhere in the name -> INTEGER
+        assert_eq!(sqlite_type_to_arrow(Some("TINYINT")), DataType::Int64);
+        assert_eq!(sqlite_type_to_arrow(Some("MEDIUMINT")), DataType::Int64);
+        assert_eq!(sqlite_type_to_arrow(Some("INT8")), DataType::Int64);
+        assert_eq!(
+            sqlite_type_to_arrow(Some("UNSIGNED BIG INT")),
+            DataType::Int64
+        );
+
+        // CHAR/CLOB
+        assert_eq!(sqlite_type_to_arrow(Some("CHARACTER(20)")), DataType::Utf8);
+        assert_eq!(
+            sqlite_type_to_arrow(Some("VARYING CHARACTER(255)")),
+            DataType::Utf8
+        );
+        assert_eq!(sqlite_type_to_arrow(Some("CLOB")), DataType::Utf8);
+        assert_eq!(
+            sqlite_type_to_arrow(Some("NATIVE CHARACTER(70)")),
+            DataType::Utf8
+        );
+
+        // REAL/FLOAT/DOUBLE
+        assert_eq!(
+            sqlite_type_to_arrow(Some("DOUBLE PRECISION")),
+            DataType::Float64
+        );
+        assert_eq!(sqlite_type_to_arrow(Some("FLOAT")), DataType::Float64);
+    }
+
+    #[test]
+    fn test_type_mapping_empty_string() {
+        assert_eq!(sqlite_type_to_arrow(Some("")), DataType::Utf8);
+    }
+
+    #[test]
+    fn test_build_arrow_schema() {
+        let columns = vec![
+            ColumnInfo {
+                name: "id".to_string(),
+                data_type: DataType::Int64,
+                nullable: false,
+            },
+            ColumnInfo {
+                name: "name".to_string(),
+                data_type: DataType::Utf8,
+                nullable: true,
+            },
+        ];
+        let schema = build_arrow_schema(&columns);
+        assert_eq!(schema.fields().len(), 2);
+        assert_eq!(schema.field(0).name(), "id");
+        assert_eq!(*schema.field(0).data_type(), DataType::Int64);
+        assert!(!schema.field(0).is_nullable());
+        assert_eq!(schema.field(1).name(), "name");
+        assert!(schema.field(1).is_nullable());
+    }
+
+    #[test]
+    fn test_build_arrow_schema_empty() {
+        let columns: Vec<ColumnInfo> = vec![];
+        let schema = build_arrow_schema(&columns);
+        assert_eq!(schema.fields().len(), 0);
     }
 }

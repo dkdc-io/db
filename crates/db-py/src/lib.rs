@@ -12,38 +12,48 @@ fn runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Runtime::new().expect("failed to create tokio runtime")
 }
 
-fn json_value_to_py(py: Python<'_>, val: &serde_json::Value) -> Py<PyAny> {
+fn json_value_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py<PyAny>> {
     match val {
-        serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => (*b)
+        serde_json::Value::Null => Ok(py.None()),
+        serde_json::Value::Bool(b) => Ok((*b)
             .into_pyobject(py)
-            .unwrap()
+            .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?
             .to_owned()
             .unbind()
-            .into_any(),
+            .into_any()),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                i.into_pyobject(py).unwrap().unbind().into_any()
+                Ok(i.into_pyobject(py)
+                    .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?
+                    .unbind()
+                    .into_any())
             } else {
-                n.as_f64()
+                Ok(n.as_f64()
                     .unwrap_or(0.0)
                     .into_pyobject(py)
-                    .unwrap()
+                    .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?
                     .unbind()
-                    .into_any()
+                    .into_any())
             }
         }
-        serde_json::Value::String(s) => s.into_pyobject(py).unwrap().unbind().into_any(),
+        serde_json::Value::String(s) => Ok(s
+            .into_pyobject(py)
+            .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?
+            .unbind()
+            .into_any()),
         serde_json::Value::Array(arr) => {
-            let items: Vec<Py<PyAny>> = arr.iter().map(|v| json_value_to_py(py, v)).collect();
-            PyList::new(py, items).unwrap().unbind().into_any()
+            let items: Vec<Py<PyAny>> = arr
+                .iter()
+                .map(|v| json_value_to_py(py, v))
+                .collect::<PyResult<_>>()?;
+            Ok(PyList::new(py, items)?.unbind().into_any())
         }
         serde_json::Value::Object(map) => {
             let dict = PyDict::new(py);
             for (k, v) in map {
-                dict.set_item(k, json_value_to_py(py, v)).unwrap();
+                dict.set_item(k, json_value_to_py(py, v)?)?;
             }
-            dict.unbind().into_any()
+            Ok(dict.unbind().into_any())
         }
     }
 }
@@ -66,10 +76,13 @@ fn query_response_to_py(py: Python<'_>, resp: QueryResponse) -> PyResult<Py<PyAn
         .rows
         .iter()
         .map(|row| {
-            let items: Vec<Py<PyAny>> = row.iter().map(|v| json_value_to_py(py, v)).collect();
-            PyList::new(py, items).unwrap().unbind().into_any()
+            let items: Vec<Py<PyAny>> = row
+                .iter()
+                .map(|v| json_value_to_py(py, v))
+                .collect::<PyResult<_>>()?;
+            Ok(PyList::new(py, items)?.unbind().into_any())
         })
-        .collect();
+        .collect::<PyResult<_>>()?;
 
     let dict = PyDict::new(py);
     dict.set_item("columns", PyList::new(py, columns)?)?;
