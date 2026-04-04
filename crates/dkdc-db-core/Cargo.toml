@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
-description = "HTAP embedded database: turso writes + DataFusion reads"
+description = "HTAP database: turso writes + DataFusion reads"
 license = "MIT"
 repository = "https://github.com/dkdc-io/db"
 

@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 pub const TMUX_SESSION: &str = "dkdc-db";
 
 #[derive(Parser)]
-#[command(name = "db", about = "dkdc-db: HTAP embedded database")]
+#[command(name = "db", about = "dkdc-db: HTAP database")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -13,12 +13,6 @@ pub struct Cli {
 pub enum Commands {
     /// Start the database server (in tmux)
     Serve {
-        /// Database name or path (stored at ~/.dkdc/db/{name}.db).
-        /// Supports nested names like "project/mydb".
-        /// Omit for in-memory database (no persistence).
-        #[arg(long)]
-        db: Option<String>,
-
         /// Host to bind to
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
@@ -47,17 +41,41 @@ pub enum Commands {
         #[arg(short, long, default_value_t = 50)]
         lines: usize,
     },
+    /// Create a new database
+    Create {
+        /// Database name
+        #[arg()]
+        name: String,
+        /// Server URL
+        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        url: String,
+    },
+    /// Drop a database
+    Drop {
+        /// Database name
+        #[arg()]
+        name: String,
+        /// Server URL
+        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        url: String,
+    },
     /// Interactive SQL REPL
     Repl {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Initial database to use
+        #[arg(long)]
+        db: Option<String>,
     },
     /// Execute a read query and print results
     Query {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Database for OLTP query (omit for global analytical)
+        #[arg(long)]
+        db: Option<String>,
         /// SQL query to execute
         sql: String,
     },
@@ -66,15 +84,25 @@ pub enum Commands {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Target database (required)
+        #[arg(long)]
+        db: String,
         /// SQL statement to execute
         sql: String,
     },
-    /// List tables on the server
+    /// List tables in a database
     Tables {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Database name (required)
+        #[arg(long)]
+        db: String,
     },
-    /// List databases in ~/.dkdc/db/
-    List,
+    /// List databases
+    List {
+        /// Server URL
+        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        url: String,
+    },
 }

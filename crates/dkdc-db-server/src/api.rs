@@ -3,22 +3,30 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use dkdc_db_core::DkdcDb;
+use dkdc_db_core::DbManager;
 use serde::{Deserialize, Serialize};
 
-type AppState = Arc<DkdcDb>;
+type AppState = Arc<DbManager>;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .route("/execute", post(execute))
+        .route("/db", post(create_db))
+        .route("/db", get(list_dbs))
+        .route("/db/{name}", delete(drop_db))
+        .route("/db/{name}/execute", post(execute))
+        .route("/db/{name}/query/oltp", post(query_oltp))
+        .route("/db/{name}/tables", get(list_tables))
+        .route("/db/{name}/schema/{table}", get(table_schema))
         .route("/query", post(query))
-        .route("/query/oltp", post(query_oltp))
-        .route("/tables", get(list_tables))
-        .route("/schema/{table}", get(table_schema))
         .route("/health", get(health))
         .with_state(state)
+}
+
+#[derive(Deserialize)]
+struct CreateDbRequest {
+    name: String,
 }
 
 #[derive(Deserialize)]
@@ -111,40 +119,73 @@ fn column_value_to_json(col: &dyn arrow::array::Array, row: usize) -> serde_json
     }
 }
 
-async fn execute(State(db): State<AppState>, Json(req): Json<SqlRequest>) -> impl IntoResponse {
-    match db.execute(&req.sql).await {
+async fn create_db(
+    State(mgr): State<AppState>,
+    Json(req): Json<CreateDbRequest>,
+) -> impl IntoResponse {
+    match mgr.create_db(&req.name).await {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({"name": req.name})),
+        )
+            .into_response(),
+        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+    }
+}
+
+async fn drop_db(State(mgr): State<AppState>, Path(name): Path<String>) -> impl IntoResponse {
+    match mgr.drop_db(&name).await {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"dropped": name}))).into_response(),
+        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+    }
+}
+
+async fn list_dbs(State(mgr): State<AppState>) -> impl IntoResponse {
+    let dbs = mgr.list_dbs().await;
+    (StatusCode::OK, Json(dbs))
+}
+
+async fn execute(
+    State(mgr): State<AppState>,
+    Path(name): Path<String>,
+    Json(req): Json<SqlRequest>,
+) -> impl IntoResponse {
+    match mgr.execute(&name, &req.sql).await {
         Ok(affected) => (StatusCode::OK, Json(ExecuteResponse { affected })).into_response(),
         Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
     }
 }
 
-async fn query(State(db): State<AppState>, Json(req): Json<SqlRequest>) -> impl IntoResponse {
-    match db.query(&req.sql).await {
+async fn query(State(mgr): State<AppState>, Json(req): Json<SqlRequest>) -> impl IntoResponse {
+    match mgr.query(&req.sql).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
     }
 }
 
-async fn query_oltp(State(db): State<AppState>, Json(req): Json<SqlRequest>) -> impl IntoResponse {
-    match db.query_oltp(&req.sql).await {
+async fn query_oltp(
+    State(mgr): State<AppState>,
+    Path(name): Path<String>,
+    Json(req): Json<SqlRequest>,
+) -> impl IntoResponse {
+    match mgr.query_oltp(&name, &req.sql).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
     }
 }
 
-async fn list_tables(State(db): State<AppState>) -> impl IntoResponse {
-    match db.list_tables().await {
+async fn list_tables(State(mgr): State<AppState>, Path(name): Path<String>) -> impl IntoResponse {
+    match mgr.list_tables(&name).await {
         Ok(tables) => (StatusCode::OK, Json(tables)).into_response(),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
     }
 }
 
-async fn table_schema(State(db): State<AppState>, Path(table): Path<String>) -> impl IntoResponse {
-    let sql = format!(
-        "SELECT name, type FROM pragma_table_info('{}')",
-        table.replace('\'', "''")
-    );
-    match db.query_oltp(&sql).await {
+async fn table_schema(
+    State(mgr): State<AppState>,
+    Path((name, table)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match mgr.table_schema(&name, &table).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
     }

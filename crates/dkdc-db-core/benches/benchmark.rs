@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use dkdc_db_core::DkdcDb;
+use dkdc_db_core::DbManager;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tokio::runtime::Runtime;
@@ -32,20 +32,26 @@ const CATEGORIES: &[&str] = &[
 ];
 
 /// Create the multi-table schema and populate with data.
-/// Returns the db handle ready for querying.
-async fn setup_multi_table(size: usize) -> DkdcDb {
-    let db = DkdcDb::open_in_memory().await.unwrap();
+async fn setup_multi_table(size: usize) -> DbManager {
+    let mgr = DbManager::new_in_memory().await.unwrap();
+    mgr.create_db("bench").await.unwrap();
 
-    // Create tables
-    db.execute("CREATE TABLE regions (id INTEGER PRIMARY KEY, name TEXT, country TEXT)")
-        .await
-        .unwrap();
+    mgr.execute(
+        "bench",
+        "CREATE TABLE regions (id INTEGER PRIMARY KEY, name TEXT, country TEXT)",
+    )
+    .await
+    .unwrap();
 
-    db.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, category TEXT)")
-        .await
-        .unwrap();
+    mgr.execute(
+        "bench",
+        "CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, category TEXT)",
+    )
+    .await
+    .unwrap();
 
-    db.execute(
+    mgr.execute(
+        "bench",
         "CREATE TABLE sales (
             id INTEGER PRIMARY KEY,
             region_id INTEGER,
@@ -59,32 +65,36 @@ async fn setup_multi_table(size: usize) -> DkdcDb {
     .unwrap();
 
     // Insert regions
-    db.execute("BEGIN").await.unwrap();
+    mgr.execute("bench", "BEGIN").await.unwrap();
     for i in 0..10 {
         let name = REGIONS[i];
-        db.execute(&format!("INSERT INTO regions VALUES ({i}, '{name}', 'US')"))
-            .await
-            .unwrap();
-    }
-    db.execute("COMMIT").await.unwrap();
-
-    // Insert products
-    db.execute("BEGIN").await.unwrap();
-    for i in 0..100 {
-        let category = CATEGORIES[i % CATEGORIES.len()];
-        db.execute(&format!(
-            "INSERT INTO products VALUES ({i}, 'product_{i}', '{category}')"
-        ))
+        mgr.execute(
+            "bench",
+            &format!("INSERT INTO regions VALUES ({i}, '{name}', 'US')"),
+        )
         .await
         .unwrap();
     }
-    db.execute("COMMIT").await.unwrap();
+    mgr.execute("bench", "COMMIT").await.unwrap();
+
+    // Insert products
+    mgr.execute("bench", "BEGIN").await.unwrap();
+    for i in 0..100 {
+        let category = CATEGORIES[i % CATEGORIES.len()];
+        mgr.execute(
+            "bench",
+            &format!("INSERT INTO products VALUES ({i}, 'product_{i}', '{category}')"),
+        )
+        .await
+        .unwrap();
+    }
+    mgr.execute("bench", "COMMIT").await.unwrap();
 
     // Insert sales
     let mut rng = StdRng::seed_from_u64(SEED);
     let batch_size = 5_000;
     for batch_start in (0..size).step_by(batch_size) {
-        db.execute("BEGIN").await.unwrap();
+        mgr.execute("bench", "BEGIN").await.unwrap();
         let batch_end = (batch_start + batch_size).min(size);
         for i in batch_start..batch_end {
             let region_id = rng.random_range(0..10);
@@ -92,24 +102,28 @@ async fn setup_multi_table(size: usize) -> DkdcDb {
             let amount: f64 = rng.random_range(1.0..1000.0);
             let quantity: i64 = rng.random_range(1..100);
             let ts: i64 = rng.random_range(1704067200..1735689600);
-            db.execute(&format!(
-                "INSERT INTO sales VALUES ({i}, {region_id}, {product_id}, {amount}, {quantity}, {ts})"
-            ))
+            mgr.execute(
+                "bench",
+                &format!(
+                    "INSERT INTO sales VALUES ({i}, {region_id}, {product_id}, {amount}, {quantity}, {ts})"
+                ),
+            )
             .await
             .unwrap();
         }
-        db.execute("COMMIT").await.unwrap();
+        mgr.execute("bench", "COMMIT").await.unwrap();
     }
 
-    db.refresh_schema().await.unwrap();
-    db
+    mgr
 }
 
 /// Setup a single sales table (flat, no joins needed).
-async fn setup_flat(size: usize) -> DkdcDb {
-    let db = DkdcDb::open_in_memory().await.unwrap();
+async fn setup_flat(size: usize) -> DbManager {
+    let mgr = DbManager::new_in_memory().await.unwrap();
+    mgr.create_db("bench").await.unwrap();
 
-    db.execute(
+    mgr.execute(
+        "bench",
         "CREATE TABLE sales (
             id INTEGER PRIMARY KEY,
             region TEXT,
@@ -125,7 +139,7 @@ async fn setup_flat(size: usize) -> DkdcDb {
     let mut rng = StdRng::seed_from_u64(SEED);
     let batch_size = 5_000;
     for batch_start in (0..size).step_by(batch_size) {
-        db.execute("BEGIN").await.unwrap();
+        mgr.execute("bench", "BEGIN").await.unwrap();
         let batch_end = (batch_start + batch_size).min(size);
         for i in batch_start..batch_end {
             let region = REGIONS[rng.random_range(0..REGIONS.len())];
@@ -133,40 +147,47 @@ async fn setup_flat(size: usize) -> DkdcDb {
             let amount: f64 = rng.random_range(1.0..1000.0);
             let quantity: i64 = rng.random_range(1..100);
             let ts: i64 = rng.random_range(1704067200..1735689600);
-            db.execute(&format!(
-                "INSERT INTO sales VALUES ({i}, '{region}', '{product}', {amount}, {quantity}, {ts})"
-            ))
+            mgr.execute(
+                "bench",
+                &format!(
+                    "INSERT INTO sales VALUES ({i}, '{region}', '{product}', {amount}, {quantity}, {ts})"
+                ),
+            )
             .await
             .unwrap();
         }
-        db.execute("COMMIT").await.unwrap();
+        mgr.execute("bench", "COMMIT").await.unwrap();
     }
 
-    db.refresh_schema().await.unwrap();
-    db
+    mgr
 }
 
 // ---------------------------------------------------------------------------
-// Existing benchmarks (kept as-is)
+// Write benchmarks (still use DkdcDb directly for raw write perf)
 // ---------------------------------------------------------------------------
 
 fn bench_write_single_row(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    let db = rt.block_on(async {
-        let db = DkdcDb::open_in_memory().await.unwrap();
-        db.execute("CREATE TABLE bench_write (id INTEGER PRIMARY KEY, val TEXT)")
-            .await
-            .unwrap();
-        db
+    let mgr = rt.block_on(async {
+        let mgr = DbManager::new_in_memory().await.unwrap();
+        mgr.create_db("bench").await.unwrap();
+        mgr.execute(
+            "bench",
+            "CREATE TABLE bench_write (id INTEGER PRIMARY KEY, val TEXT)",
+        )
+        .await
+        .unwrap();
+        mgr
     });
 
     let mut i = 0i64;
     c.bench_function("write_single_row", |b| {
         b.iter(|| {
             rt.block_on(async {
-                db.execute(&format!(
-                    "INSERT INTO bench_write VALUES ({i}, 'value_{i}')"
-                ))
+                mgr.execute(
+                    "bench",
+                    &format!("INSERT INTO bench_write VALUES ({i}, 'value_{i}')"),
+                )
                 .await
                 .unwrap();
             });
@@ -183,17 +204,21 @@ fn bench_write_batch(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
                 rt.block_on(async {
-                    let db = DkdcDb::open_in_memory().await.unwrap();
-                    db.execute("CREATE TABLE batch (id INTEGER PRIMARY KEY, val INTEGER)")
-                        .await
-                        .unwrap();
-                    db.execute("BEGIN").await.unwrap();
+                    let mgr = DbManager::new_in_memory().await.unwrap();
+                    mgr.create_db("bench").await.unwrap();
+                    mgr.execute(
+                        "bench",
+                        "CREATE TABLE batch (id INTEGER PRIMARY KEY, val INTEGER)",
+                    )
+                    .await
+                    .unwrap();
+                    mgr.execute("bench", "BEGIN").await.unwrap();
                     for i in 0..size {
-                        db.execute(&format!("INSERT INTO batch VALUES ({i}, {i})"))
+                        mgr.execute("bench", &format!("INSERT INTO batch VALUES ({i}, {i})"))
                             .await
                             .unwrap();
                     }
-                    db.execute("COMMIT").await.unwrap();
+                    mgr.execute("bench", "COMMIT").await.unwrap();
                 });
             })
         });
@@ -202,7 +227,7 @@ fn bench_write_batch(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
-// New analytical benchmarks
+// Analytical benchmarks
 // ---------------------------------------------------------------------------
 
 fn bench_scan_full(c: &mut Criterion) {
@@ -211,12 +236,12 @@ fn bench_scan_full(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
             b.iter(|| {
                 rt.block_on(async {
-                    db.query("SELECT * FROM sales").await.unwrap();
+                    mgr.query("SELECT * FROM bench.public.sales").await.unwrap();
                 })
             })
         });
@@ -224,7 +249,9 @@ fn bench_scan_full(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
             b.iter(|| {
                 rt.block_on(async {
-                    db.query_oltp("SELECT * FROM sales").await.unwrap();
+                    mgr.query_oltp("bench", "SELECT * FROM sales")
+                        .await
+                        .unwrap();
                 })
             })
         });
@@ -238,12 +265,14 @@ fn bench_scan_projected(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
             b.iter(|| {
                 rt.block_on(async {
-                    db.query("SELECT region, amount FROM sales").await.unwrap();
+                    mgr.query("SELECT region, amount FROM bench.public.sales")
+                        .await
+                        .unwrap();
                 })
             })
         });
@@ -251,7 +280,7 @@ fn bench_scan_projected(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
             b.iter(|| {
                 rt.block_on(async {
-                    db.query_oltp("SELECT region, amount FROM sales")
+                    mgr.query_oltp("bench", "SELECT region, amount FROM sales")
                         .await
                         .unwrap();
                 })
@@ -267,16 +296,18 @@ fn bench_agg_simple(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
-        let sql = "SELECT region, COUNT(*), SUM(amount), AVG(amount) FROM sales GROUP BY region";
+        let df_sql = "SELECT region, COUNT(*), SUM(amount), AVG(amount) FROM bench.public.sales GROUP BY region";
+        let oltp_sql =
+            "SELECT region, COUNT(*), SUM(amount), AVG(amount) FROM sales GROUP BY region";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -288,17 +319,19 @@ fn bench_agg_complex(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
-        let sql = "SELECT region, product, COUNT(*), SUM(amount), AVG(amount), MIN(amount), MAX(amount) \
+        let df_sql = "SELECT region, product, COUNT(*), SUM(amount), AVG(amount), MIN(amount), MAX(amount) \
+                   FROM bench.public.sales GROUP BY region, product";
+        let oltp_sql = "SELECT region, product, COUNT(*), SUM(amount), AVG(amount), MIN(amount), MAX(amount) \
                    FROM sales GROUP BY region, product";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -309,20 +342,19 @@ fn bench_agg_many_groups(c: &mut Criterion) {
     let mut group = c.benchmark_group("agg_many_groups");
     group.sample_size(10);
 
-    // Use ts as the high-cardinality group column (many distinct values)
-    // Actually, product has only 100 distinct. Let's use (ts / 1000) to get ~31K groups.
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
-        let sql =
+        let df_sql = "SELECT ts / 1000 as ts_bucket, COUNT(*), SUM(amount) FROM bench.public.sales GROUP BY ts / 1000";
+        let oltp_sql =
             "SELECT ts / 1000 as ts_bucket, COUNT(*), SUM(amount) FROM sales GROUP BY ts / 1000";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -334,18 +366,21 @@ fn bench_join_two_tables(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000] {
-        let db = rt.block_on(setup_multi_table(size));
+        let mgr = rt.block_on(setup_multi_table(size));
 
-        let sql = "SELECT r.name, SUM(s.amount) as revenue \
+        let df_sql = "SELECT r.name, SUM(s.amount) as revenue \
+                   FROM bench.public.sales s JOIN bench.public.regions r ON s.region_id = r.id \
+                   GROUP BY r.name ORDER BY revenue DESC";
+        let oltp_sql = "SELECT r.name, SUM(s.amount) as revenue \
                    FROM sales s JOIN regions r ON s.region_id = r.id \
                    GROUP BY r.name ORDER BY revenue DESC";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -357,9 +392,15 @@ fn bench_join_three_tables(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000] {
-        let db = rt.block_on(setup_multi_table(size));
+        let mgr = rt.block_on(setup_multi_table(size));
 
-        let sql = "SELECT r.name as region, p.category, SUM(s.amount) as revenue, COUNT(*) as cnt \
+        let df_sql = "SELECT r.name as region, p.category, SUM(s.amount) as revenue, COUNT(*) as cnt \
+                   FROM bench.public.sales s \
+                   JOIN bench.public.regions r ON s.region_id = r.id \
+                   JOIN bench.public.products p ON s.product_id = p.id \
+                   GROUP BY r.name, p.category \
+                   ORDER BY revenue DESC";
+        let oltp_sql = "SELECT r.name as region, p.category, SUM(s.amount) as revenue, COUNT(*) as cnt \
                    FROM sales s \
                    JOIN regions r ON s.region_id = r.id \
                    JOIN products p ON s.product_id = p.id \
@@ -367,11 +408,11 @@ fn bench_join_three_tables(c: &mut Criterion) {
                    ORDER BY revenue DESC";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -384,15 +425,15 @@ fn bench_window_function(c: &mut Criterion) {
 
     // DataFusion only — window functions
     for size in [1_000, 10_000, 100_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
         let sql = "SELECT region, product, amount, \
                    SUM(amount) OVER (PARTITION BY region ORDER BY ts) as running_total, \
                    RANK() OVER (PARTITION BY region ORDER BY amount DESC) as rank \
-                   FROM sales";
+                   FROM bench.public.sales";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -404,19 +445,23 @@ fn bench_subquery(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
-        let sql = "SELECT region, SUM(amount) as total \
+        let df_sql = "SELECT region, SUM(amount) as total \
+                   FROM bench.public.sales \
+                   WHERE product IN (SELECT product FROM bench.public.sales GROUP BY product HAVING AVG(quantity) > 50) \
+                   GROUP BY region ORDER BY total DESC";
+        let oltp_sql = "SELECT region, SUM(amount) as total \
                    FROM sales \
                    WHERE product IN (SELECT product FROM sales GROUP BY product HAVING AVG(quantity) > 50) \
                    GROUP BY region ORDER BY total DESC";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -428,17 +473,17 @@ fn bench_filter_scan(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
-        // Selective filter: ~10% of rows (1 of 10 regions)
-        let sql = "SELECT * FROM sales WHERE region = 'North'";
+        let df_sql = "SELECT * FROM bench.public.sales WHERE region = 'North'";
+        let oltp_sql = "SELECT * FROM sales WHERE region = 'North'";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -450,16 +495,17 @@ fn bench_orderby_limit(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [1_000, 10_000, 100_000, 500_000] {
-        let db = rt.block_on(setup_flat(size));
+        let mgr = rt.block_on(setup_flat(size));
 
-        let sql = "SELECT * FROM sales ORDER BY amount DESC LIMIT 10";
+        let df_sql = "SELECT * FROM bench.public.sales ORDER BY amount DESC LIMIT 10";
+        let oltp_sql = "SELECT * FROM sales ORDER BY amount DESC LIMIT 10";
 
         group.bench_with_input(BenchmarkId::new("datafusion", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query(df_sql).await.unwrap() }))
         });
 
         group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
+            b.iter(|| rt.block_on(async { mgr.query_oltp("bench", oltp_sql).await.unwrap() }))
         });
     }
     group.finish();

@@ -14,12 +14,18 @@ pub enum Commands {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Initial database to use
+        #[arg(long)]
+        db: Option<String>,
     },
     /// Execute a read query and print results
     Query {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Database for OLTP query (omit for global analytical)
+        #[arg(long)]
+        db: Option<String>,
         /// SQL query to execute
         sql: String,
     },
@@ -28,15 +34,25 @@ pub enum Commands {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Target database (required)
+        #[arg(long)]
+        db: String,
         /// SQL statement to execute
         sql: String,
     },
-    /// List tables on the server
+    /// List tables in a database
     Tables {
         /// Server URL
         #[arg(long, default_value = "http://127.0.0.1:4200")]
         url: String,
+        /// Database name (required)
+        #[arg(long)]
+        db: String,
     },
-    /// List databases in ~/.dkdc/db/
-    List,
+    /// List databases
+    List {
+        /// Server URL
+        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        url: String,
+    },
 }
