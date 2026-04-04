@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use dkdc_db_client::DbClient;
-use dkdc_db_core::DkdcDb;
+use dkdc_db_core::DbManager;
 use dkdc_db_server::api;
 
 struct BenchConfig {
@@ -57,9 +57,8 @@ impl BenchResult {
 }
 
 async fn setup_server() -> (u16, tokio::task::JoinHandle<()>) {
-    let db = DkdcDb::open_in_memory().await.unwrap();
-    let state = Arc::new(db);
-    let app = api::router(state);
+    let manager = Arc::new(DbManager::new_in_memory().await.unwrap());
+    let app = api::router(manager);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -81,8 +80,9 @@ async fn setup_server() -> (u16, tokio::task::JoinHandle<()>) {
 
 async fn seed_data(port: u16, rows: usize) {
     let client = DbClient::localhost(port);
+    client.create_db("bench").await.unwrap();
     client
-        .execute("CREATE TABLE IF NOT EXISTS bench (id INTEGER PRIMARY KEY, region TEXT, amount REAL, name TEXT)")
+        .execute("bench", "CREATE TABLE IF NOT EXISTS bench (id INTEGER PRIMARY KEY, region TEXT, amount REAL, name TEXT)")
         .await
         .unwrap();
 
@@ -95,9 +95,10 @@ async fn seed_data(port: u16, rows: usize) {
         };
         let amount = (i as f64) * 1.5;
         client
-            .execute(&format!(
-                "INSERT INTO bench VALUES ({i}, '{region}', {amount}, 'user_{i}')"
-            ))
+            .execute(
+                "bench",
+                &format!("INSERT INTO bench VALUES ({i}, '{region}', {amount}, 'user_{i}')"),
+            )
             .await
             .unwrap();
     }
@@ -123,8 +124,7 @@ async fn bench_write(port: u16, config: &BenchConfig) -> Vec<BenchResult> {
                     let sql =
                         format!("INSERT INTO bench VALUES ({id}, 'bench', {id}.0, 'bench_{id}')");
                     let t = Instant::now();
-                    // Writes may fail under concurrency; record latency regardless
-                    let _ = client.execute(&sql).await;
+                    let _ = client.execute("bench", &sql).await;
                     latencies.push(t.elapsed());
                 }
                 latencies
@@ -174,18 +174,16 @@ async fn bench_read(
                 for _ in 0..reqs {
                     let t = Instant::now();
                     let result = if use_oltp {
-                        client.query_oltp(&sql).await
+                        client.query_oltp("bench", &sql).await
                     } else {
                         client.query(&sql).await
                     };
                     let elapsed = t.elapsed();
-                    // Under high concurrency, turso may reject concurrent reads
-                    // on the same connection. Retry after a brief yield.
                     if result.is_err() {
                         tokio::task::yield_now().await;
                         let t2 = Instant::now();
                         let _ = if use_oltp {
-                            client.query_oltp(&sql).await
+                            client.query_oltp("bench", &sql).await
                         } else {
                             client.query(&sql).await
                         };
@@ -270,11 +268,11 @@ async fn main() {
     let write_results = bench_write(write_port, &config).await;
     print_results("WRITE (INSERT)", &write_results);
 
-    // Read benchmarks
+    // Read benchmarks — use qualified names for DataFusion path
     let point_results = bench_read(
         read_port,
         &config,
-        "SELECT * FROM bench WHERE id = 42",
+        "SELECT * FROM bench.public.bench WHERE id = 42",
         QueryPath::DataFusion,
     )
     .await;
@@ -283,7 +281,7 @@ async fn main() {
     let scan_results = bench_read(
         read_port,
         &config,
-        "SELECT * FROM bench",
+        "SELECT * FROM bench.public.bench",
         QueryPath::DataFusion,
     )
     .await;
@@ -291,12 +289,12 @@ async fn main() {
 
     let agg_results = bench_read(
         read_port, &config,
-        "SELECT region, count(*) as cnt, sum(amount) as total, avg(amount) as avg_amt FROM bench GROUP BY region ORDER BY region",
+        "SELECT region, count(*) as cnt, sum(amount) as total, avg(amount) as avg_amt FROM bench.public.bench GROUP BY region ORDER BY region",
         QueryPath::DataFusion,
     ).await;
     print_results("READ - Aggregation (GROUP BY)", &agg_results);
 
-    // Turso fast path
+    // Turso fast path — uses unqualified names (scoped to db)
     let turso_results = bench_read(
         read_port,
         &config,

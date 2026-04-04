@@ -1,18 +1,13 @@
-use std::path::PathBuf;
-
 use arrow::record_batch::RecordBatch;
 
 use crate::config::DbConfig;
 use crate::convert::rows_to_record_batch_with_first;
 use crate::error::Result;
-use crate::read::ReadEngine;
-use crate::router;
 use crate::schema;
 use crate::write::WriteEngine;
 
 pub struct DkdcDb {
     write: WriteEngine,
-    read: ReadEngine,
     db: turso::Database,
 }
 
@@ -35,12 +30,8 @@ impl DkdcDb {
         write_conn.pragma_update("journal_mode", "'wal'").await?;
 
         let write = WriteEngine::new(write_conn);
-        let read = ReadEngine::new(db.clone());
 
-        // Register existing tables with DataFusion
-        read.register_tables().await?;
-
-        Ok(Self { write, read, db })
+        Ok(Self { write, db })
     }
 
     /// Open an in-memory database (for testing).
@@ -53,29 +44,18 @@ impl DkdcDb {
         write_conn.pragma_update("journal_mode", "'wal'").await?;
 
         let write = WriteEngine::new(write_conn);
-        let read = ReadEngine::new(db.clone());
 
-        Ok(Self { write, read, db })
+        Ok(Self { write, db })
     }
 
     /// Execute a write statement (CREATE, INSERT, UPDATE, DELETE).
     /// Returns the number of rows affected.
+    /// DDL detection is handled by DbManager (it needs to refresh the catalog).
     pub async fn execute(&self, sql: &str) -> Result<u64> {
-        let result = self.write.execute(sql).await?;
-        if router::is_ddl(sql) {
-            self.read.refresh_schema().await?;
-        }
-        Ok(result)
+        self.write.execute(sql).await
     }
 
-    /// Execute a read query through DataFusion (analytical engine).
-    /// Best for: joins, aggregations, window functions, complex analytical queries.
-    pub async fn query(&self, sql: &str) -> Result<Vec<RecordBatch>> {
-        self.read.query(sql).await
-    }
-
-    /// Execute a read query directly through turso (fast path).
-    /// Best for: point lookups, simple SELECTs, low-latency reads (~15-50x faster than `query`).
+    /// OLTP fast-path read. Direct turso execution, no DataFusion.
     pub async fn query_oltp(&self, sql: &str) -> Result<Vec<RecordBatch>> {
         let conn = self.db.connect()?;
         let mut rows = conn.query(sql, ()).await?;
@@ -121,29 +101,19 @@ impl DkdcDb {
         Ok(vec![batch])
     }
 
-    /// Refresh DataFusion's view of the schema.
-    pub async fn refresh_schema(&self) -> Result<()> {
-        self.read.refresh_schema().await
-    }
-
-    /// Get a DataFusion DataFrame for a table.
-    pub async fn table(&self, name: &str) -> Result<datafusion::dataframe::DataFrame> {
-        self.read.table(name).await
-    }
-
     /// List all user tables in the database.
     pub async fn list_tables(&self) -> Result<Vec<String>> {
         let conn = self.db.connect()?;
         schema::list_tables(&conn).await
     }
 
-    /// Get the path to the database file (if file-backed).
-    pub fn path(&self) -> Option<PathBuf> {
-        None
-    }
-
-    /// Get a reference to the underlying turso::Database.
+    /// Expose turso::Database for catalog registration.
     pub fn turso_db(&self) -> &turso::Database {
         &self.db
+    }
+
+    /// Create a new connection to the underlying database.
+    pub fn connect(&self) -> Result<turso::Connection> {
+        Ok(self.db.connect()?)
     }
 }

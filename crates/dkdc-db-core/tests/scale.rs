@@ -1,5 +1,5 @@
 use arrow::array::Array;
-use dkdc_db_core::DkdcDb;
+use dkdc_db_core::DbManager;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -19,10 +19,12 @@ const REGIONS: &[&str] = &[
 const NUM_PRODUCTS: i64 = 100;
 const SEED: u64 = 42;
 
-async fn setup_sales_db() -> DkdcDb {
-    let db = DkdcDb::open_in_memory().await.unwrap();
+async fn setup_sales_db() -> DbManager {
+    let mgr = DbManager::new_in_memory().await.unwrap();
+    mgr.create_db("test").await.unwrap();
 
-    db.execute(
+    mgr.execute(
+        "test",
         "CREATE TABLE sales (
             id INTEGER PRIMARY KEY,
             region TEXT,
@@ -40,26 +42,27 @@ async fn setup_sales_db() -> DkdcDb {
     // Insert 100K rows in batches of 10K for speed
     let batch_size = 10_000;
     for batch_start in (0..NUM_ROWS).step_by(batch_size as usize) {
-        db.execute("BEGIN").await.unwrap();
+        mgr.execute("test", "BEGIN").await.unwrap();
         let batch_end = (batch_start + batch_size).min(NUM_ROWS);
         for i in batch_start..batch_end {
             let region = REGIONS[rng.random_range(0..REGIONS.len())];
             let product = format!("product_{}", rng.random_range(0..NUM_PRODUCTS));
             let amount: f64 = rng.random_range(1.0..1000.0);
             let quantity: i64 = rng.random_range(1..100);
-            // Timestamps spanning a year (2025-01-01 to 2025-12-31 in unix seconds)
             let ts: i64 = rng.random_range(1704067200..1735689600);
-            db.execute(&format!(
-                "INSERT INTO sales VALUES ({i}, '{region}', '{product}', {amount}, {quantity}, {ts})"
-            ))
+            mgr.execute(
+                "test",
+                &format!(
+                    "INSERT INTO sales VALUES ({i}, '{region}', '{product}', {amount}, {quantity}, {ts})"
+                ),
+            )
             .await
             .unwrap();
         }
-        db.execute("COMMIT").await.unwrap();
+        mgr.execute("test", "COMMIT").await.unwrap();
     }
 
-    db.refresh_schema().await.unwrap();
-    db
+    mgr
 }
 
 fn count_rows(batches: &[arrow::record_batch::RecordBatch]) -> usize {
@@ -128,13 +131,18 @@ fn get_string_column(
 
 #[tokio::test]
 async fn scale_total_revenue_per_region() {
-    let db = setup_sales_db().await;
+    let mgr = setup_sales_db().await;
 
-    let sql =
-        "SELECT region, SUM(amount) as total_revenue FROM sales GROUP BY region ORDER BY region";
+    let sql = "SELECT region, SUM(amount) as total_revenue FROM test.public.sales GROUP BY region ORDER BY region";
 
-    let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_oltp(sql).await.unwrap();
+    let df_result = mgr.query(sql).await.unwrap();
+    let ls_result = mgr
+        .query_oltp(
+            "test",
+            "SELECT region, SUM(amount) as total_revenue FROM sales GROUP BY region ORDER BY region",
+        )
+        .await
+        .unwrap();
 
     // Both should return 10 regions
     assert_eq!(count_rows(&df_result), 10);
@@ -162,12 +170,13 @@ async fn scale_total_revenue_per_region() {
 
 #[tokio::test]
 async fn scale_top_10_products_by_revenue() {
-    let db = setup_sales_db().await;
+    let mgr = setup_sales_db().await;
 
-    let sql = "SELECT product, SUM(amount) as total_revenue FROM sales GROUP BY product ORDER BY total_revenue DESC LIMIT 10";
+    let df_sql = "SELECT product, SUM(amount) as total_revenue FROM test.public.sales GROUP BY product ORDER BY total_revenue DESC LIMIT 10";
+    let ls_sql = "SELECT product, SUM(amount) as total_revenue FROM sales GROUP BY product ORDER BY total_revenue DESC LIMIT 10";
 
-    let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_oltp(sql).await.unwrap();
+    let df_result = mgr.query(df_sql).await.unwrap();
+    let ls_result = mgr.query_oltp("test", ls_sql).await.unwrap();
 
     assert_eq!(count_rows(&df_result), 10);
     assert_eq!(count_rows(&ls_result), 10);
@@ -188,13 +197,15 @@ async fn scale_top_10_products_by_revenue() {
 
 #[tokio::test]
 async fn scale_multi_level_aggregation() {
-    let db = setup_sales_db().await;
+    let mgr = setup_sales_db().await;
 
-    let sql = "SELECT region, product, COUNT(*) as cnt, SUM(amount) as total, AVG(amount) as avg_amount \
+    let df_sql = "SELECT region, product, COUNT(*) as cnt, SUM(amount) as total, AVG(amount) as avg_amount \
+               FROM test.public.sales GROUP BY region, product ORDER BY region, product";
+    let ls_sql = "SELECT region, product, COUNT(*) as cnt, SUM(amount) as total, AVG(amount) as avg_amount \
                FROM sales GROUP BY region, product ORDER BY region, product";
 
-    let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_oltp(sql).await.unwrap();
+    let df_result = mgr.query(df_sql).await.unwrap();
+    let ls_result = mgr.query_oltp("test", ls_sql).await.unwrap();
 
     let df_rows = count_rows(&df_result);
     let ls_rows = count_rows(&ls_result);
@@ -230,15 +241,19 @@ async fn scale_multi_level_aggregation() {
 
 #[tokio::test]
 async fn scale_self_join_above_average_revenue() {
-    let db = setup_sales_db().await;
+    let mgr = setup_sales_db().await;
 
-    let sql = "SELECT r.region, r.total_revenue \
+    let df_sql = "SELECT r.region, r.total_revenue \
+               FROM (SELECT region, SUM(amount) as total_revenue FROM test.public.sales GROUP BY region) r \
+               WHERE r.total_revenue > (SELECT AVG(total_revenue) FROM (SELECT region, SUM(amount) as total_revenue FROM test.public.sales GROUP BY region)) \
+               ORDER BY r.total_revenue DESC";
+    let ls_sql = "SELECT r.region, r.total_revenue \
                FROM (SELECT region, SUM(amount) as total_revenue FROM sales GROUP BY region) r \
                WHERE r.total_revenue > (SELECT AVG(total_revenue) FROM (SELECT region, SUM(amount) as total_revenue FROM sales GROUP BY region)) \
                ORDER BY r.total_revenue DESC";
 
-    let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_oltp(sql).await.unwrap();
+    let df_result = mgr.query(df_sql).await.unwrap();
+    let ls_result = mgr.query_oltp("test", ls_sql).await.unwrap();
 
     let df_rows = count_rows(&df_result);
     let ls_rows = count_rows(&ls_result);
@@ -265,16 +280,21 @@ async fn scale_self_join_above_average_revenue() {
 
 #[tokio::test]
 async fn scale_subquery_products_above_avg_quantity() {
-    let db = setup_sales_db().await;
+    let mgr = setup_sales_db().await;
 
-    let sql = "SELECT p.product, p.avg_qty \
+    let df_sql = "SELECT p.product, p.avg_qty \
+               FROM (SELECT product, AVG(quantity) as avg_qty FROM test.public.sales GROUP BY product) p, \
+                    (SELECT AVG(quantity) as overall_avg FROM test.public.sales) o \
+               WHERE p.avg_qty > o.overall_avg \
+               ORDER BY p.avg_qty DESC";
+    let ls_sql = "SELECT p.product, p.avg_qty \
                FROM (SELECT product, AVG(quantity) as avg_qty FROM sales GROUP BY product) p, \
                     (SELECT AVG(quantity) as overall_avg FROM sales) o \
                WHERE p.avg_qty > o.overall_avg \
                ORDER BY p.avg_qty DESC";
 
-    let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_oltp(sql).await.unwrap();
+    let df_result = mgr.query(df_sql).await.unwrap();
+    let ls_result = mgr.query_oltp("test", ls_sql).await.unwrap();
 
     let df_rows = count_rows(&df_result);
     let ls_rows = count_rows(&ls_result);

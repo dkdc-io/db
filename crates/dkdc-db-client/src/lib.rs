@@ -19,6 +19,11 @@ struct SqlRequest {
     sql: String,
 }
 
+#[derive(Serialize)]
+struct CreateDbRequest {
+    name: String,
+}
+
 #[derive(Deserialize)]
 struct ExecuteResponse {
     affected: u64,
@@ -58,11 +63,62 @@ impl DbClient {
         Self::new(&format!("http://127.0.0.1:{port}"))
     }
 
-    /// Execute a write statement (CREATE, INSERT, UPDATE, DELETE).
-    pub async fn execute(&self, sql: &str) -> Result<u64> {
+    /// Create a new database.
+    pub async fn create_db(&self, name: &str) -> Result<()> {
         let resp = self
             .client
-            .post(format!("{}/execute", self.base_url))
+            .post(format!("{}/db", self.base_url))
+            .json(&CreateDbRequest {
+                name: name.to_string(),
+            })
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            let body: ErrorResponse = resp.json().await?;
+            Err(Error::Server(body.error))
+        }
+    }
+
+    /// Drop a database.
+    pub async fn drop_db(&self, name: &str) -> Result<()> {
+        let resp = self
+            .client
+            .delete(format!("{}/db/{name}", self.base_url))
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            let body: ErrorResponse = resp.json().await?;
+            Err(Error::Server(body.error))
+        }
+    }
+
+    /// List all databases.
+    pub async fn list_dbs(&self) -> Result<Vec<String>> {
+        let resp = self
+            .client
+            .get(format!("{}/db", self.base_url))
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            Ok(resp.json().await?)
+        } else {
+            let body: ErrorResponse = resp.json().await?;
+            Err(Error::Server(body.error))
+        }
+    }
+
+    /// Execute a write statement against a specific database.
+    pub async fn execute(&self, db: &str, sql: &str) -> Result<u64> {
+        let resp = self
+            .client
+            .post(format!("{}/db/{db}/execute", self.base_url))
             .json(&SqlRequest {
                 sql: sql.to_string(),
             })
@@ -78,9 +134,7 @@ impl DbClient {
         }
     }
 
-    /// Execute a read query through DataFusion (analytical engine).
-    /// Best for: joins, aggregations, window functions, complex analytical queries.
-    /// Higher latency than `query_oltp` due to query planning overhead.
+    /// Analytical query through DataFusion. Supports cross-db joins.
     pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
         let resp = self
             .client
@@ -99,13 +153,11 @@ impl DbClient {
         }
     }
 
-    /// Execute a read query directly through turso (fast path).
-    /// Best for: point lookups, simple SELECTs, low-latency reads.
-    /// ~15-50x faster than `query` for simple queries.
-    pub async fn query_oltp(&self, sql: &str) -> Result<QueryResponse> {
+    /// OLTP fast-path read against a specific database.
+    pub async fn query_oltp(&self, db: &str, sql: &str) -> Result<QueryResponse> {
         let resp = self
             .client
-            .post(format!("{}/query/oltp", self.base_url))
+            .post(format!("{}/db/{db}/query/oltp", self.base_url))
             .json(&SqlRequest {
                 sql: sql.to_string(),
             })
@@ -120,11 +172,11 @@ impl DbClient {
         }
     }
 
-    /// List all tables.
-    pub async fn list_tables(&self) -> Result<Vec<String>> {
+    /// List tables in a specific database.
+    pub async fn list_tables(&self, db: &str) -> Result<Vec<String>> {
         let resp = self
             .client
-            .get(format!("{}/tables", self.base_url))
+            .get(format!("{}/db/{db}/tables", self.base_url))
             .send()
             .await?;
 
@@ -136,11 +188,11 @@ impl DbClient {
         }
     }
 
-    /// Get table schema.
-    pub async fn table_schema(&self, table: &str) -> Result<QueryResponse> {
+    /// Get table schema for a specific database.
+    pub async fn table_schema(&self, db: &str, table: &str) -> Result<QueryResponse> {
         let resp = self
             .client
-            .get(format!("{}/schema/{table}", self.base_url))
+            .get(format!("{}/db/{db}/schema/{table}", self.base_url))
             .send()
             .await?;
 

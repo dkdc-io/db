@@ -1,32 +1,36 @@
-use dkdc_db_core::DkdcDb;
+use dkdc_db_core::DbManager;
 
 #[tokio::test]
 async fn schema_refresh_after_alter_table() {
-    let db = DkdcDb::open_in_memory().await.unwrap();
+    let mgr = DbManager::new_in_memory().await.unwrap();
+    mgr.create_db("test").await.unwrap();
 
-    db.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+    mgr.execute("test", "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
         .await
         .unwrap();
-    db.execute("INSERT INTO t VALUES (1, 'alice')")
+    mgr.execute("test", "INSERT INTO t VALUES (1, 'alice')")
         .await
         .unwrap();
 
     // Verify initial schema
-    let batches = db.query("SELECT * FROM t").await.unwrap();
+    let batches = mgr.query("SELECT * FROM test.public.t").await.unwrap();
     assert_eq!(batches[0].schema().fields().len(), 2);
 
     // ALTER TABLE ADD COLUMN
-    db.execute("ALTER TABLE t ADD COLUMN email TEXT")
+    mgr.execute("test", "ALTER TABLE t ADD COLUMN email TEXT")
         .await
         .unwrap();
 
     // Insert with new column
-    db.execute("INSERT INTO t VALUES (2, 'bob', 'bob@example.com')")
+    mgr.execute("test", "INSERT INTO t VALUES (2, 'bob', 'bob@example.com')")
         .await
         .unwrap();
 
     // DataFusion should see the new column after auto-refresh
-    let batches = db.query("SELECT * FROM t ORDER BY id").await.unwrap();
+    let batches = mgr
+        .query("SELECT * FROM test.public.t ORDER BY id")
+        .await
+        .unwrap();
     assert_eq!(batches[0].schema().fields().len(), 3);
     assert_eq!(batches[0].num_rows(), 2);
 
@@ -43,16 +47,20 @@ async fn schema_refresh_after_alter_table() {
 
 #[tokio::test]
 async fn schema_refresh_auto_after_create_table() {
-    let db = DkdcDb::open_in_memory().await.unwrap();
+    let mgr = DbManager::new_in_memory().await.unwrap();
+    mgr.create_db("test").await.unwrap();
 
-    db.execute("CREATE TABLE new_table (id INTEGER, val TEXT)")
+    mgr.execute("test", "CREATE TABLE new_table (id INTEGER, val TEXT)")
         .await
         .unwrap();
 
     // Should be queryable immediately via DataFusion without manual refresh
-    db.execute("INSERT INTO new_table VALUES (1, 'test')")
+    mgr.execute("test", "INSERT INTO new_table VALUES (1, 'test')")
         .await
         .unwrap();
-    let batches = db.query("SELECT * FROM new_table").await.unwrap();
+    let batches = mgr
+        .query("SELECT * FROM test.public.new_table")
+        .await
+        .unwrap();
     assert_eq!(batches[0].num_rows(), 1);
 }

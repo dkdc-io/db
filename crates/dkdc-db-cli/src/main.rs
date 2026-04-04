@@ -1,5 +1,7 @@
 mod cli;
 
+use std::sync::Arc;
+
 use clap::Parser;
 use cli::{Cli, Commands, TMUX_SESSION};
 use dkdc_db_client::DbClient;
@@ -15,37 +17,23 @@ async fn main() -> anyhow::Result<()> {
             Cli::parse_from(["db", "--help"]);
         }
         Some(Commands::Serve {
-            db,
             host,
             port,
             foreground,
         }) => {
             if foreground {
-                let database = match &db {
-                    Some(name) => dkdc_db_core::DkdcDb::open(name).await?,
-                    None => dkdc_db_core::DkdcDb::open_in_memory().await?,
-                };
-                let mode = match &db {
-                    Some(name) => format!("file:{name}"),
-                    None => "in-memory".to_string(),
-                };
-                println!("mode: {mode}");
-                dkdc_db_server::serve(database, &host, port).await?;
+                let manager = Arc::new(dkdc_db_core::DbManager::new().await?);
+                println!("mode: multi-database (manages ~/.dkdc/db/)");
+                dkdc_db_server::serve(manager, &host, port).await?;
             } else {
                 if dkdc_sh::tmux::has_session(TMUX_SESSION) {
                     anyhow::bail!("dkdc-db already running in tmux session '{TMUX_SESSION}'");
                 }
-                let db_flag = match &db {
-                    Some(name) => format!(" --db {name}"),
-                    None => String::new(),
-                };
-                let cmd = format!("db serve --foreground{db_flag} --host {host} --port {port}");
+                let cmd = format!("db serve --foreground --host {host} --port {port}");
                 dkdc_sh::tmux::new_session(TMUX_SESSION, &cmd)?;
-                let mode = match &db {
-                    Some(name) => format!("file:{name}"),
-                    None => "in-memory".to_string(),
-                };
-                println!("dkdc-db server started ({mode}) in tmux session '{TMUX_SESSION}'");
+                println!(
+                    "dkdc-db server started (multi-database) in tmux session '{TMUX_SESSION}'"
+                );
                 println!();
                 println!("Commands:");
                 println!("  db attach    # View server output");
@@ -98,23 +86,36 @@ async fn main() -> anyhow::Result<()> {
             let output = dkdc_sh::tmux::capture_pane(TMUX_SESSION, Some(lines))?;
             print!("{output}");
         }
-        Some(Commands::Repl { url }) => {
+        Some(Commands::Create { name, url }) => {
             let client = DbClient::new(&url);
-            dkdc_db_client::repl::run(&client).await?;
+            client.create_db(&name).await?;
+            println!("Created database: {name}");
         }
-        Some(Commands::Query { url, sql }) => {
+        Some(Commands::Drop { name, url }) => {
             let client = DbClient::new(&url);
-            let resp = client.query(&sql).await?;
+            client.drop_db(&name).await?;
+            println!("Dropped database: {name}");
+        }
+        Some(Commands::Repl { url, db }) => {
+            let client = DbClient::new(&url);
+            dkdc_db_client::repl::run(&client, db.as_deref()).await?;
+        }
+        Some(Commands::Query { url, db, sql }) => {
+            let client = DbClient::new(&url);
+            let resp = match db {
+                Some(db_name) => client.query_oltp(&db_name, &sql).await?,
+                None => client.query(&sql).await?,
+            };
             dkdc_db_client::repl::print_query_response(&resp);
         }
-        Some(Commands::Execute { url, sql }) => {
+        Some(Commands::Execute { url, db, sql }) => {
             let client = DbClient::new(&url);
-            let affected = client.execute(&sql).await?;
+            let affected = client.execute(&db, &sql).await?;
             println!("OK ({affected} rows affected)");
         }
-        Some(Commands::Tables { url }) => {
+        Some(Commands::Tables { url, db }) => {
             let client = DbClient::new(&url);
-            let tables = client.list_tables().await?;
+            let tables = client.list_tables(&db).await?;
             if tables.is_empty() {
                 println!("(no tables)");
             } else {
@@ -123,29 +124,15 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Some(Commands::List) => {
-            let db_dir = dkdc_home::ensure("db")?;
-            let mut found = false;
-            fn walk(dir: &std::path::Path, base: &std::path::Path, found: &mut bool) {
-                let Ok(entries) = std::fs::read_dir(dir) else {
-                    return;
-                };
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        walk(&path, base, found);
-                    } else if path.extension().is_some_and(|ext| ext == "db") {
-                        if let Ok(rel) = path.strip_prefix(base) {
-                            let name = rel.with_extension("");
-                            println!("{}", name.display());
-                            *found = true;
-                        }
-                    }
+        Some(Commands::List { url }) => {
+            let client = DbClient::new(&url);
+            let dbs = client.list_dbs().await?;
+            if dbs.is_empty() {
+                println!("(no databases)");
+            } else {
+                for db in dbs {
+                    println!("{db}");
                 }
-            }
-            walk(&db_dir, &db_dir, &mut found);
-            if !found {
-                println!("(no databases found)");
             }
         }
     }

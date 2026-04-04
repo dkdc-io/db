@@ -9,7 +9,7 @@ async fn custom_path_works() {
     let db = DkdcDb::open_with_config(config).await.unwrap();
     db.execute("CREATE TABLE t (id INTEGER)").await.unwrap();
     db.execute("INSERT INTO t VALUES (1)").await.unwrap();
-    let batches = db.query("SELECT * FROM t").await.unwrap();
+    let batches = db.query_oltp("SELECT * FROM t").await.unwrap();
     assert_eq!(batches[0].num_rows(), 1);
 
     // Verify file exists

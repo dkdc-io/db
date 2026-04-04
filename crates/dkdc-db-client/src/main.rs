@@ -11,23 +11,26 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Repl { url } => {
+        Commands::Repl { url, db } => {
             let client = DbClient::new(&url);
-            dkdc_db_client::repl::run(&client).await?;
+            dkdc_db_client::repl::run(&client, db.as_deref()).await?;
         }
-        Commands::Query { url, sql } => {
+        Commands::Query { url, db, sql } => {
             let client = DbClient::new(&url);
-            let resp = client.query(&sql).await?;
+            let resp = match db {
+                Some(db_name) => client.query_oltp(&db_name, &sql).await?,
+                None => client.query(&sql).await?,
+            };
             dkdc_db_client::repl::print_query_response(&resp);
         }
-        Commands::Execute { url, sql } => {
+        Commands::Execute { url, db, sql } => {
             let client = DbClient::new(&url);
-            let affected = client.execute(&sql).await?;
+            let affected = client.execute(&db, &sql).await?;
             println!("OK ({affected} rows affected)");
         }
-        Commands::Tables { url } => {
+        Commands::Tables { url, db } => {
             let client = DbClient::new(&url);
-            let tables = client.list_tables().await?;
+            let tables = client.list_tables(&db).await?;
             if tables.is_empty() {
                 println!("(no tables)");
             } else {
@@ -36,21 +39,15 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::List => {
-            let db_dir = dkdc_home::ensure("db")?;
-            let mut found = false;
-            for entry in std::fs::read_dir(db_dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "db") {
-                    if let Some(stem) = path.file_stem() {
-                        println!("{}", stem.to_string_lossy());
-                        found = true;
-                    }
+        Commands::List { url } => {
+            let client = DbClient::new(&url);
+            let dbs = client.list_dbs().await?;
+            if dbs.is_empty() {
+                println!("(no databases)");
+            } else {
+                for db in dbs {
+                    println!("{db}");
                 }
-            }
-            if !found {
-                println!("(no databases found)");
             }
         }
     }

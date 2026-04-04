@@ -1,11 +1,13 @@
 use arrow::datatypes::DataType;
-use dkdc_db_core::DkdcDb;
+use dkdc_db_core::DbManager;
 
 #[tokio::test]
 async fn all_sqlite_types_roundtrip_through_arrow() {
-    let db = DkdcDb::open_in_memory().await.unwrap();
+    let mgr = DbManager::new_in_memory().await.unwrap();
+    mgr.create_db("test").await.unwrap();
 
-    db.execute(
+    mgr.execute(
+        "test",
         "CREATE TABLE type_test (
             int_col INTEGER,
             real_col REAL,
@@ -17,12 +19,18 @@ async fn all_sqlite_types_roundtrip_through_arrow() {
     .await
     .unwrap();
 
-    db.execute("INSERT INTO type_test VALUES (42, 3.14, 'hello', X'DEADBEEF', NULL)")
-        .await
-        .unwrap();
+    mgr.execute(
+        "test",
+        "INSERT INTO type_test VALUES (42, 3.14, 'hello', X'DEADBEEF', NULL)",
+    )
+    .await
+    .unwrap();
 
     // Read via DataFusion
-    let batches = db.query("SELECT * FROM type_test").await.unwrap();
+    let batches = mgr
+        .query("SELECT * FROM test.public.type_test")
+        .await
+        .unwrap();
     assert_eq!(batches.len(), 1);
     let batch = &batches[0];
     assert_eq!(batch.num_rows(), 1);
@@ -68,7 +76,10 @@ async fn all_sqlite_types_roundtrip_through_arrow() {
     assert!(batch.column(4).is_null(0));
 
     // Verify same data via turso
-    let ls_batches = db.query_oltp("SELECT * FROM type_test").await.unwrap();
+    let ls_batches = mgr
+        .query_oltp("test", "SELECT * FROM type_test")
+        .await
+        .unwrap();
     assert_eq!(ls_batches.len(), 1);
     let ls_batch = &ls_batches[0];
     assert_eq!(ls_batch.num_rows(), 1);
