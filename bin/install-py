@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+echo "Installing dkdc-db Python package..."
+uv run maturin develop --release
+echo "Python install complete!"

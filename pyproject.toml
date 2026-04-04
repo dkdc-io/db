@@ -1,0 +1,35 @@
+[project]
+name = "dkdc-db"
+version = "0.1.0"
+description = "HTAP embedded database"
+authors = [{ name = "Cody", email = "cody@dkdc.io" }]
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+dependencies = []
+
+[project.scripts]
+db = "dkdc_db:main"
+
+[dependency-groups]
+dev = ["maturin>=1.0,<2.0", "ruff>=0.9", "ty>=0.0.19", "pytest>=8"]
+
+[tool.maturin]
+module-name = "dkdc_db._core"
+python-packages = ["dkdc_db"]
+python-source = "py"
+manifest-path = "crates/db-py/Cargo.toml"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "crates/dkdc-db-core/**/*.rs" },
+    { file = "crates/dkdc-db-client/**/*.rs" },
+    { file = "crates/db-py/**/*.rs" },
+    { file = "py/dkdc_db/**/*.py" },
+]

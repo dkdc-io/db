@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+echo "Building dkdc-db sdist..."
+uv run maturin sdist --out dist
+echo "sdist build complete!"

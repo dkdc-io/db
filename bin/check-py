@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+echo "Running ruff..."
+uv run --only-group dev ruff check .
+uv run --only-group dev ruff format --check .
+
+echo "Building Python bindings for type checking..."
+uv run maturin develop
+
+echo "Running ty..."
+uv run ty check
+
+echo "Python checks passed!"
