@@ -49,10 +49,7 @@ async fn all_methods_fail_when_no_server() {
         Error::Http(_)
     ));
     assert!(matches!(
-        client
-            .table_schema("test", "users")
-            .await
-            .unwrap_err(),
+        client.table_schema("test", "users").await.unwrap_err(),
         Error::Http(_)
     ));
 }
@@ -60,9 +57,7 @@ async fn all_methods_fail_when_no_server() {
 /// Server errors should be returned as Error::Server with the message.
 #[tokio::test]
 async fn server_error_propagated() {
-    let manager = std::sync::Arc::new(
-        dkdc_db_core::DbManager::new_in_memory().await.unwrap(),
-    );
+    let manager = std::sync::Arc::new(dkdc_db_core::DbManager::new_in_memory().await.unwrap());
     let app = dkdc_db_server::api::router(manager);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -93,9 +88,7 @@ async fn server_error_propagated() {
 /// Client correctly handles successful responses too.
 #[tokio::test]
 async fn client_roundtrip_success() {
-    let manager = std::sync::Arc::new(
-        dkdc_db_core::DbManager::new_in_memory().await.unwrap(),
-    );
+    let manager = std::sync::Arc::new(dkdc_db_core::DbManager::new_in_memory().await.unwrap());
     let app = dkdc_db_server::api::router(manager);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();

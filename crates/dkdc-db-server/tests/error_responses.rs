@@ -100,9 +100,7 @@ async fn query_nonexistent_table() {
     let (client, _handle) = setup().await;
     client.create_db("test").await.unwrap();
 
-    let result = client
-        .query_oltp("test", "SELECT * FROM nonexistent")
-        .await;
+    let result = client.query_oltp("test", "SELECT * FROM nonexistent").await;
     assert!(result.is_err());
 }
 

@@ -10,9 +10,12 @@ async fn concurrent_ops_on_different_dbs() {
     // Create 5 databases
     for i in 0..5 {
         mgr.create_db(&format!("db{i}")).await.unwrap();
-        mgr.execute(&format!("db{i}"), "CREATE TABLE data (id INTEGER, val TEXT)")
-            .await
-            .unwrap();
+        mgr.execute(
+            &format!("db{i}"),
+            "CREATE TABLE data (id INTEGER, val TEXT)",
+        )
+        .await
+        .unwrap();
     }
 
     // Concurrently write to all 5 databases
@@ -22,9 +25,12 @@ async fn concurrent_ops_on_different_dbs() {
         handles.push(tokio::spawn(async move {
             let db = format!("db{i}");
             for j in 0..50 {
-                mgr.execute(&db, &format!("INSERT INTO data VALUES ({j}, 'val_{i}_{j}')"))
-                    .await
-                    .unwrap();
+                mgr.execute(
+                    &db,
+                    &format!("INSERT INTO data VALUES ({j}, 'val_{i}_{j}')"),
+                )
+                .await
+                .unwrap();
             }
         }));
     }
@@ -258,10 +264,7 @@ async fn drop_db_while_querying_others() {
     mgr.drop_db("remove").await.unwrap();
 
     // The kept database should still work fine
-    let batches = mgr
-        .query_oltp("keep", "SELECT id FROM t")
-        .await
-        .unwrap();
+    let batches = mgr.query_oltp("keep", "SELECT id FROM t").await.unwrap();
     let arr = batches[0]
         .column(0)
         .as_any()
@@ -270,10 +273,7 @@ async fn drop_db_while_querying_others() {
     assert_eq!(arr.value(0), 42);
 
     // DataFusion path should also work
-    let batches = mgr
-        .query("SELECT id FROM keep.public.t")
-        .await
-        .unwrap();
+    let batches = mgr.query("SELECT id FROM keep.public.t").await.unwrap();
     assert_eq!(batches[0].num_rows(), 1);
 }
 

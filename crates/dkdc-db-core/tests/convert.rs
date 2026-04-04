@@ -19,10 +19,7 @@ async fn int_column_with_real_value_datafusion() {
         .unwrap();
 
     // DataFusion path uses the schema declaration (INTEGER → Int64)
-    let batches = mgr
-        .query("SELECT val FROM test.public.t")
-        .await
-        .unwrap();
+    let batches = mgr.query("SELECT val FROM test.public.t").await.unwrap();
     assert_eq!(batches[0].num_rows(), 2);
     let arr = batches[0]
         .column(0)
@@ -203,10 +200,7 @@ async fn binary_column_with_blob_data_datafusion() {
         .await
         .unwrap();
 
-    let batches = mgr
-        .query("SELECT val FROM test.public.t")
-        .await
-        .unwrap();
+    let batches = mgr.query("SELECT val FROM test.public.t").await.unwrap();
     let arr = batches[0]
         .column(0)
         .as_any()
@@ -242,22 +236,16 @@ async fn binary_column_with_blob_data_oltp() {
 async fn all_null_column() {
     let mgr = DbManager::new_in_memory().await.unwrap();
     mgr.create_db("test").await.unwrap();
-    mgr.execute(
-        "test",
-        "CREATE TABLE t (a INTEGER, b REAL, c TEXT, d BLOB)",
-    )
-    .await
-    .unwrap();
+    mgr.execute("test", "CREATE TABLE t (a INTEGER, b REAL, c TEXT, d BLOB)")
+        .await
+        .unwrap();
     for _ in 0..5 {
         mgr.execute("test", "INSERT INTO t VALUES (NULL, NULL, NULL, NULL)")
             .await
             .unwrap();
     }
 
-    let batches = mgr
-        .query_oltp("test", "SELECT * FROM t")
-        .await
-        .unwrap();
+    let batches = mgr.query_oltp("test", "SELECT * FROM t").await.unwrap();
     let batch = &batches[0];
     assert_eq!(batch.num_rows(), 5);
 
@@ -273,12 +261,9 @@ async fn all_null_column() {
 async fn mixed_null_non_null_all_types() {
     let mgr = DbManager::new_in_memory().await.unwrap();
     mgr.create_db("test").await.unwrap();
-    mgr.execute(
-        "test",
-        "CREATE TABLE t (a INTEGER, b REAL, c TEXT, d BLOB)",
-    )
-    .await
-    .unwrap();
+    mgr.execute("test", "CREATE TABLE t (a INTEGER, b REAL, c TEXT, d BLOB)")
+        .await
+        .unwrap();
     mgr.execute("test", "INSERT INTO t VALUES (1, 1.0, 'x', X'AA')")
         .await
         .unwrap();
@@ -289,10 +274,7 @@ async fn mixed_null_non_null_all_types() {
         .await
         .unwrap();
 
-    let batches = mgr
-        .query_oltp("test", "SELECT * FROM t")
-        .await
-        .unwrap();
+    let batches = mgr.query_oltp("test", "SELECT * FROM t").await.unwrap();
     let batch = &batches[0];
     assert_eq!(batch.num_rows(), 3);
 
@@ -369,10 +351,7 @@ async fn binary_column_integer_datafusion_fallback_null() {
         .await
         .unwrap();
 
-    let batches = mgr
-        .query("SELECT val FROM test.public.t")
-        .await
-        .unwrap();
+    let batches = mgr.query("SELECT val FROM test.public.t").await.unwrap();
     let arr = batches[0]
         .column(0)
         .as_any()
@@ -387,12 +366,9 @@ async fn binary_column_integer_datafusion_fallback_null() {
 async fn oltp_and_datafusion_consistency() {
     let mgr = DbManager::new_in_memory().await.unwrap();
     mgr.create_db("test").await.unwrap();
-    mgr.execute(
-        "test",
-        "CREATE TABLE t (i INTEGER, r REAL, t TEXT, b BLOB)",
-    )
-    .await
-    .unwrap();
+    mgr.execute("test", "CREATE TABLE t (i INTEGER, r REAL, t TEXT, b BLOB)")
+        .await
+        .unwrap();
     mgr.execute(
         "test",
         "INSERT INTO t VALUES (42, 3.14, 'hello', X'DEADBEEF')",
@@ -404,10 +380,7 @@ async fn oltp_and_datafusion_consistency() {
         .unwrap();
 
     let oltp = mgr.query_oltp("test", "SELECT * FROM t").await.unwrap();
-    let df = mgr
-        .query("SELECT * FROM test.public.t")
-        .await
-        .unwrap();
+    let df = mgr.query("SELECT * FROM test.public.t").await.unwrap();
 
     assert_eq!(oltp[0].num_rows(), df[0].num_rows());
     assert_eq!(oltp[0].num_columns(), df[0].num_columns());
@@ -423,7 +396,10 @@ async fn oltp_and_datafusion_consistency() {
     // Same nullability pattern
     for col in 0..oltp[0].num_columns() {
         for row in 0..oltp[0].num_rows() {
-            assert_eq!(oltp[0].column(col).is_null(row), df[0].column(col).is_null(row));
+            assert_eq!(
+                oltp[0].column(col).is_null(row),
+                df[0].column(col).is_null(row)
+            );
         }
     }
 }
@@ -460,16 +436,21 @@ async fn large_blob_roundtrip() {
 async fn many_rows_mixed_types() {
     let mgr = DbManager::new_in_memory().await.unwrap();
     mgr.create_db("test").await.unwrap();
-    mgr.execute(
-        "test",
-        "CREATE TABLE t (id INTEGER, score REAL, name TEXT)",
-    )
-    .await
-    .unwrap();
+    mgr.execute("test", "CREATE TABLE t (id INTEGER, score REAL, name TEXT)")
+        .await
+        .unwrap();
 
     for i in 0..200 {
-        let name = if i % 3 == 0 { "NULL" } else { &format!("'user_{i}'") };
-        let score = if i % 5 == 0 { "NULL".to_string() } else { format!("{}.{}", i, i % 10) };
+        let name = if i % 3 == 0 {
+            "NULL"
+        } else {
+            &format!("'user_{i}'")
+        };
+        let score = if i % 5 == 0 {
+            "NULL".to_string()
+        } else {
+            format!("{}.{}", i, i % 10)
+        };
         mgr.execute(
             "test",
             &format!("INSERT INTO t VALUES ({i}, {score}, {name})"),
