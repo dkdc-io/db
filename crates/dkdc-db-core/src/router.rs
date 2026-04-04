@@ -120,9 +120,7 @@ mod tests {
             "WITH cte AS (SELECT 1) UPDATE t SET x = 1 WHERE id IN (SELECT * FROM cte)"
         ));
         // WITH ... SELECT is not a write
-        assert!(!is_write(
-            "WITH cte AS (SELECT 1) SELECT * FROM cte"
-        ));
+        assert!(!is_write("WITH cte AS (SELECT 1) SELECT * FROM cte"));
         // Multiple CTEs
         assert!(is_write(
             "WITH a AS (SELECT 1), b AS (SELECT 2) INSERT INTO t SELECT * FROM a"
