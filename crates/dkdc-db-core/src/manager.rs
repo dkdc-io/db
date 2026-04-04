@@ -130,9 +130,13 @@ impl DbManager {
             .get(db_name)
             .ok_or_else(|| Error::Schema(format!("database '{db_name}' not found")))?;
         let result = managed.db.execute(sql).await?;
-        // Refresh catalog if DDL
+        // Refresh catalog if DDL (selective: only the affected table)
         if router::is_ddl(sql) {
-            managed.catalog.schema_provider().refresh().await?;
+            managed
+                .catalog
+                .schema_provider()
+                .refresh_for_ddl(sql)
+                .await?;
         }
         Ok(result)
     }

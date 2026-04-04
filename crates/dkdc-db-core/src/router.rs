@@ -37,6 +37,10 @@ fn strip_with_prefix(sql: &str) -> String {
     // CTEs are `WITH name AS (...)`, potentially nested parens.
     // We scan past balanced parentheses to find the terminal statement.
     let bytes = upper.as_bytes();
+    // We work on the original SQL (preserving case) for string-literal tracking,
+    // but use the uppercased version for keyword detection. Both have the same byte
+    // length because to_uppercase on ASCII-only SQL is length-preserving.
+    let orig_bytes = sql.trim_start().as_bytes();
     let mut i = 4; // skip "WITH"
     loop {
         // Skip to next open paren (the CTE body)
@@ -46,9 +50,30 @@ fn strip_with_prefix(sql: &str) -> String {
         if i >= bytes.len() {
             break;
         }
-        // Skip balanced parens
+        // Skip balanced parens, tracking single-quoted strings
         let mut depth = 0;
         while i < bytes.len() {
+            if orig_bytes[i] == b'\'' {
+                // Inside a single-quoted string — advance past it
+                i += 1;
+                while i < orig_bytes.len() {
+                    if orig_bytes[i] == b'\'' {
+                        // Check for escaped quote ('')
+                        if i + 1 < orig_bytes.len() && orig_bytes[i + 1] == b'\'' {
+                            i += 2;
+                            continue;
+                        }
+                        // End of string
+                        break;
+                    }
+                    i += 1;
+                }
+                // skip closing quote
+                if i < orig_bytes.len() {
+                    i += 1;
+                }
+                continue;
+            }
             if bytes[i] == b'(' {
                 depth += 1;
             } else if bytes[i] == b')' {
@@ -124,6 +149,51 @@ mod tests {
         // Multiple CTEs
         assert!(is_write(
             "WITH a AS (SELECT 1), b AS (SELECT 2) INSERT INTO t SELECT * FROM a"
+        ));
+    }
+
+    #[test]
+    fn test_cte_with_string_literal_parens() {
+        // String containing '(' must not misbalance the paren counter
+        assert!(is_write(
+            "WITH cte AS (SELECT '(' AS x) INSERT INTO t SELECT * FROM cte"
+        ));
+        assert!(!is_read(
+            "WITH cte AS (SELECT '(' AS x) INSERT INTO t SELECT * FROM cte"
+        ));
+        // String containing ')'
+        assert!(is_write(
+            "WITH cte AS (SELECT ')' AS x) INSERT INTO t SELECT * FROM cte"
+        ));
+        // Both parens in string
+        assert!(is_write(
+            "WITH cte AS (SELECT '()' AS x) INSERT INTO t SELECT * FROM cte"
+        ));
+        // Read variant should still work
+        assert!(is_read("WITH cte AS (SELECT '(' AS x) SELECT * FROM cte"));
+    }
+
+    #[test]
+    fn test_cte_with_recursive_and_strings() {
+        assert!(is_write(
+            "WITH RECURSIVE cte AS (SELECT '(' AS x UNION ALL SELECT x FROM cte) INSERT INTO t SELECT * FROM cte"
+        ));
+        assert!(is_read(
+            "WITH RECURSIVE cte AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM cte WHERE n < 10) SELECT * FROM cte"
+        ));
+    }
+
+    #[test]
+    fn test_cte_with_escaped_quotes() {
+        // Escaped single quote ('') inside a string
+        assert!(is_write(
+            "WITH cte AS (SELECT '''' AS x) INSERT INTO t SELECT * FROM cte"
+        ));
+        assert!(is_write(
+            "WITH cte AS (SELECT 'it''s a (test)' AS x) INSERT INTO t SELECT * FROM cte"
+        ));
+        assert!(is_read(
+            "WITH cte AS (SELECT 'it''s a (test)' AS x) SELECT * FROM cte"
         ));
     }
 
