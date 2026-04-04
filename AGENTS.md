@@ -34,14 +34,14 @@ crates/
 Two read paths — use the right one:
 
 - **`query()` / `POST /query`** — routes through DataFusion. Best for joins, aggregations, window functions, analytical queries. Higher latency (~7-10ms) due to query planning.
-- **`query_turso()` / `POST /query/turso`** — direct turso execution. Best for point lookups, simple SELECTs. ~15-50x faster than DataFusion path for simple queries (~0.4ms).
+- **`query_oltp()` / `POST /query/oltp`** — direct turso execution. Best for point lookups, simple SELECTs. ~15-50x faster than DataFusion path for simple queries (~0.4ms).
 
 ### REST API
 
 ```
 POST /execute        { "sql": "..." }  → { "affected": N }
 POST /query          { "sql": "..." }  → { "columns": [...], "rows": [...] }  (DataFusion)
-POST /query/turso    { "sql": "..." }  → { "columns": [...], "rows": [...] }  (fast path)
+POST /query/oltp    { "sql": "..." }  → { "columns": [...], "rows": [...] }  (fast path)
 GET  /tables                           → ["table1", "table2"]
 GET  /schema/:table                    → { "columns": [...], "rows": [...] }
 GET  /health                           → { "status": "ok" }
@@ -71,6 +71,6 @@ Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 - No `unwrap()` in library code, all errors via `Result`
 - `execute()` for writes only, `query()` for reads only (enforced)
 - `query()` always routes through DataFusion (analytical)
-- `query_turso()` for low-latency simple reads (fast path)
+- `query_oltp()` for low-latency simple reads (fast path)
 - Default is in-memory; use `--db name` for persistence
 - Client requires server running; all access through HTTP API

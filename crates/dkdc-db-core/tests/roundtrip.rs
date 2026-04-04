@@ -24,7 +24,7 @@ async fn roundtrip_write_and_read_via_both_engines() {
 
     // Read via turso
     let ls_batches = db
-        .query_turso("SELECT * FROM users ORDER BY id")
+        .query_oltp("SELECT * FROM users ORDER BY id")
         .await
         .unwrap();
     let ls_total: usize = ls_batches.iter().map(|b| b.num_rows()).sum();
@@ -42,7 +42,7 @@ async fn roundtrip_write_and_read_via_both_engines() {
         .await
         .unwrap();
     let ls_first = db
-        .query_turso("SELECT id, name FROM users WHERE id = 0")
+        .query_oltp("SELECT id, name FROM users WHERE id = 0")
         .await
         .unwrap();
     assert_eq!(df_first[0].num_rows(), 1);

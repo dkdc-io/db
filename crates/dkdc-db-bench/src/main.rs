@@ -149,7 +149,7 @@ async fn bench_write(port: u16, config: &BenchConfig) -> Vec<BenchResult> {
 
 enum QueryPath {
     DataFusion,
-    Turso,
+    Oltp,
 }
 
 async fn bench_read(
@@ -164,7 +164,7 @@ async fn bench_read(
         let reqs = config.requests_per_client;
         let mut handles = Vec::new();
         let start = Instant::now();
-        let use_turso = matches!(path, QueryPath::Turso);
+        let use_oltp = matches!(path, QueryPath::Oltp);
 
         for _ in 0..concurrency {
             let sql = sql.to_string();
@@ -173,8 +173,8 @@ async fn bench_read(
                 let mut latencies = Vec::with_capacity(reqs);
                 for _ in 0..reqs {
                     let t = Instant::now();
-                    let result = if use_turso {
-                        client.query_turso(&sql).await
+                    let result = if use_oltp {
+                        client.query_oltp(&sql).await
                     } else {
                         client.query(&sql).await
                     };
@@ -184,8 +184,8 @@ async fn bench_read(
                     if result.is_err() {
                         tokio::task::yield_now().await;
                         let t2 = Instant::now();
-                        let _ = if use_turso {
-                            client.query_turso(&sql).await
+                        let _ = if use_oltp {
+                            client.query_oltp(&sql).await
                         } else {
                             client.query(&sql).await
                         };
@@ -301,10 +301,10 @@ async fn main() {
         read_port,
         &config,
         "SELECT * FROM bench WHERE id = 42",
-        QueryPath::Turso,
+        QueryPath::Oltp,
     )
     .await;
-    print_results("READ - Turso Fast Path (WHERE id = N)", &turso_results);
+    print_results("READ - OLTP Fast Path (WHERE id = N)", &turso_results);
 
     println!("\n=== Load Test Complete ===");
 }

@@ -45,10 +45,7 @@ async fn concurrent_write_and_read() {
     }
 
     // Verify via turso too
-    let ls_batches = db
-        .query_turso("SELECT count(*) FROM counter")
-        .await
-        .unwrap();
+    let ls_batches = db.query_oltp("SELECT count(*) FROM counter").await.unwrap();
     let ls_cnt = ls_batches[0]
         .column(0)
         .as_any()

@@ -134,7 +134,7 @@ async fn scale_total_revenue_per_region() {
         "SELECT region, SUM(amount) as total_revenue FROM sales GROUP BY region ORDER BY region";
 
     let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_turso(sql).await.unwrap();
+    let ls_result = db.query_oltp(sql).await.unwrap();
 
     // Both should return 10 regions
     assert_eq!(count_rows(&df_result), 10);
@@ -167,7 +167,7 @@ async fn scale_top_10_products_by_revenue() {
     let sql = "SELECT product, SUM(amount) as total_revenue FROM sales GROUP BY product ORDER BY total_revenue DESC LIMIT 10";
 
     let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_turso(sql).await.unwrap();
+    let ls_result = db.query_oltp(sql).await.unwrap();
 
     assert_eq!(count_rows(&df_result), 10);
     assert_eq!(count_rows(&ls_result), 10);
@@ -194,7 +194,7 @@ async fn scale_multi_level_aggregation() {
                FROM sales GROUP BY region, product ORDER BY region, product";
 
     let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_turso(sql).await.unwrap();
+    let ls_result = db.query_oltp(sql).await.unwrap();
 
     let df_rows = count_rows(&df_result);
     let ls_rows = count_rows(&ls_result);
@@ -238,7 +238,7 @@ async fn scale_self_join_above_average_revenue() {
                ORDER BY r.total_revenue DESC";
 
     let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_turso(sql).await.unwrap();
+    let ls_result = db.query_oltp(sql).await.unwrap();
 
     let df_rows = count_rows(&df_result);
     let ls_rows = count_rows(&ls_result);
@@ -274,7 +274,7 @@ async fn scale_subquery_products_above_avg_quantity() {
                ORDER BY p.avg_qty DESC";
 
     let df_result = db.query(sql).await.unwrap();
-    let ls_result = db.query_turso(sql).await.unwrap();
+    let ls_result = db.query_oltp(sql).await.unwrap();
 
     let df_rows = count_rows(&df_result);
     let ls_rows = count_rows(&ls_result);

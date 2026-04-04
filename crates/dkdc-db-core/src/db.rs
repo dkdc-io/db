@@ -76,7 +76,7 @@ impl DkdcDb {
 
     /// Execute a read query directly through turso (fast path).
     /// Best for: point lookups, simple SELECTs, low-latency reads (~15-50x faster than `query`).
-    pub async fn query_turso(&self, sql: &str) -> Result<Vec<RecordBatch>> {
+    pub async fn query_oltp(&self, sql: &str) -> Result<Vec<RecordBatch>> {
         let conn = self.db.connect()?;
         let mut rows = conn.query(sql, ()).await?;
 
