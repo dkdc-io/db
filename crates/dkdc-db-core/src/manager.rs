@@ -11,7 +11,7 @@ use datafusion::catalog::MemoryCatalogProvider;
 use crate::catalog::SqliteCatalogProvider;
 use crate::config::DbConfig;
 use crate::db::DkdcDb;
-use crate::error::{Error, Result};
+use crate::error::{self, Error, Result};
 use crate::router;
 
 struct ManagedDb {
@@ -56,6 +56,7 @@ impl DbManager {
 
     /// Create a new database. Opens it immediately and registers catalog.
     pub async fn create_db(&self, name: &str) -> Result<()> {
+        error::validate_db_name(name)?;
         let mut dbs = self.dbs.write().await;
         if dbs.contains_key(name) {
             return Err(Error::Schema(format!("database '{name}' already exists")));
@@ -115,6 +116,7 @@ impl DbManager {
 
     /// Execute a write against a specific database.
     pub async fn execute(&self, db_name: &str, sql: &str) -> Result<u64> {
+        error::validate_sql(sql)?;
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
         let managed = dbs
@@ -130,6 +132,7 @@ impl DbManager {
 
     /// Analytical query through DataFusion. Supports cross-db joins.
     pub async fn query(&self, sql: &str) -> Result<Vec<RecordBatch>> {
+        error::validate_sql(sql)?;
         if router::is_write(sql) {
             return Err(Error::WriteOnReadPath(sql.to_string()));
         }
@@ -139,6 +142,7 @@ impl DbManager {
 
     /// OLTP fast-path read against a specific database.
     pub async fn query_oltp(&self, db_name: &str, sql: &str) -> Result<Vec<RecordBatch>> {
+        error::validate_sql(sql)?;
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
         dbs.get(db_name)
@@ -161,12 +165,11 @@ impl DbManager {
 
     /// Table schema for a specific database.
     pub async fn table_schema(&self, db_name: &str, table: &str) -> Result<Vec<RecordBatch>> {
+        error::validate_table_name(table)?;
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
-        let sql = format!(
-            "SELECT name, type FROM pragma_table_info('{}')",
-            table.replace('\'', "''")
-        );
+        // Table name is validated above (alphanumeric + underscores only), safe for interpolation
+        let sql = format!("SELECT name, type FROM pragma_table_info('{table}')");
         dbs.get(db_name)
             .ok_or_else(|| Error::Schema(format!("database '{db_name}' not found")))?
             .db

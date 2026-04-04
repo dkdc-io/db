@@ -11,7 +11,7 @@ repository = "https://github.com/dkdc-io/db"
 [dependencies]
 dkdc-db-core = { version = "0.1", path = "../dkdc-db-core" }
 axum = { version = "0.8", features = ["json"] }
-tokio = { version = "1", features = ["net"] }
+tokio = { version = "1", features = ["net", "signal", "macros"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
