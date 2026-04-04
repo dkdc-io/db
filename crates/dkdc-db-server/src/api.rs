@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::StatusCode;
@@ -7,9 +8,14 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use dkdc_db_core::DbManager;
 use serde::{Deserialize, Serialize};
+use tower_http::timeout::TimeoutLayer;
+use tower_http::trace::TraceLayer;
 
 /// Max request body size: 16 MB
 const MAX_BODY_SIZE: usize = 16 * 1024 * 1024;
+
+/// Request timeout
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 type AppState = Arc<DbManager>;
 
@@ -25,6 +31,11 @@ pub fn router(state: AppState) -> Router {
         .route("/query", post(query))
         .route("/health", get(health))
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
+        .layer(TraceLayer::new_for_http())
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
         .with_state(state)
 }
 
@@ -128,19 +139,31 @@ async fn create_db(
     Json(req): Json<CreateDbRequest>,
 ) -> impl IntoResponse {
     match mgr.create_db(&req.name).await {
-        Ok(()) => (
-            StatusCode::CREATED,
-            Json(serde_json::json!({"name": req.name})),
-        )
-            .into_response(),
-        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+        Ok(()) => {
+            tracing::info!(db = %req.name, "database created");
+            (
+                StatusCode::CREATED,
+                Json(serde_json::json!({"name": req.name})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::warn!(db = %req.name, error = %e, "create_db failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 
 async fn drop_db(State(mgr): State<AppState>, Path(name): Path<String>) -> impl IntoResponse {
     match mgr.drop_db(&name).await {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"dropped": name}))).into_response(),
-        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+        Ok(()) => {
+            tracing::info!(db = %name, "database dropped");
+            (StatusCode::OK, Json(serde_json::json!({"dropped": name}))).into_response()
+        }
+        Err(e) => {
+            tracing::warn!(db = %name, error = %e, "drop_db failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 
@@ -155,15 +178,24 @@ async fn execute(
     Json(req): Json<SqlRequest>,
 ) -> impl IntoResponse {
     match mgr.execute(&name, &req.sql).await {
-        Ok(affected) => (StatusCode::OK, Json(ExecuteResponse { affected })).into_response(),
-        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+        Ok(affected) => {
+            tracing::info!(db = %name, affected, "execute ok");
+            (StatusCode::OK, Json(ExecuteResponse { affected })).into_response()
+        }
+        Err(e) => {
+            tracing::warn!(db = %name, error = %e, "execute failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 
 async fn query(State(mgr): State<AppState>, Json(req): Json<SqlRequest>) -> impl IntoResponse {
     match mgr.query(&req.sql).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
-        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "query failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 
@@ -174,14 +206,20 @@ async fn query_oltp(
 ) -> impl IntoResponse {
     match mgr.query_oltp(&name, &req.sql).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
-        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+        Err(e) => {
+            tracing::warn!(db = %name, error = %e, "query_oltp failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 
 async fn list_tables(State(mgr): State<AppState>, Path(name): Path<String>) -> impl IntoResponse {
     match mgr.list_tables(&name).await {
         Ok(tables) => (StatusCode::OK, Json(tables)).into_response(),
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
+        Err(e) => {
+            tracing::warn!(db = %name, error = %e, "list_tables failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 
@@ -191,7 +229,10 @@ async fn table_schema(
 ) -> impl IntoResponse {
     match mgr.table_schema(&name, &table).await {
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
-        Err(e) => error_response(StatusCode::BAD_REQUEST, e).into_response(),
+        Err(e) => {
+            tracing::warn!(db = %name, table = %table, error = %e, "table_schema failed");
+            error_response(StatusCode::BAD_REQUEST, e).into_response()
+        }
     }
 }
 

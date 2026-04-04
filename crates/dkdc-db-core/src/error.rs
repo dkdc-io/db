@@ -78,6 +78,35 @@ pub fn validate_sql(sql: &str) -> Result<()> {
     if sql.trim().is_empty() {
         return Err(Error::Validation("SQL cannot be empty".into()));
     }
+    validate_sql_safety(sql)?;
+    Ok(())
+}
+
+/// Reject obviously dangerous SQL patterns.
+/// This is a lightweight defense layer — turso handles parameterization,
+/// but we reject patterns that should never appear in legitimate queries.
+fn validate_sql_safety(sql: &str) -> Result<()> {
+    let upper = sql.to_uppercase();
+
+    // Reject stacked queries (multiple statements separated by semicolons).
+    // Allow trailing semicolons but reject "SELECT 1; DROP TABLE x".
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    if trimmed.contains(';') {
+        return Err(Error::Validation(
+            "multiple SQL statements are not allowed".into(),
+        ));
+    }
+
+    // Reject ATTACH DATABASE — could open arbitrary files
+    if upper.contains("ATTACH") && upper.contains("DATABASE") {
+        return Err(Error::Validation("ATTACH DATABASE is not allowed".into()));
+    }
+
+    // Reject LOAD_EXTENSION — could load arbitrary shared libraries
+    if upper.contains("LOAD_EXTENSION") {
+        return Err(Error::Validation("LOAD_EXTENSION is not allowed".into()));
+    }
+
     Ok(())
 }
 
@@ -123,5 +152,36 @@ mod tests {
         let e = Error::Schema("test".into());
         let debug = format!("{e:?}");
         assert!(debug.contains("Schema"));
+    }
+
+    #[test]
+    fn sql_safety_rejects_stacked_queries() {
+        assert!(validate_sql("SELECT 1; DROP TABLE users").is_err());
+        assert!(validate_sql("SELECT 1;SELECT 2").is_err());
+    }
+
+    #[test]
+    fn sql_safety_allows_trailing_semicolon() {
+        assert!(validate_sql("SELECT 1;").is_ok());
+        assert!(validate_sql("SELECT 1 ;  ").is_ok());
+    }
+
+    #[test]
+    fn sql_safety_rejects_attach_database() {
+        assert!(validate_sql("ATTACH DATABASE '/etc/passwd' AS pw").is_err());
+        assert!(validate_sql("attach database 'foo.db' as bar").is_err());
+    }
+
+    #[test]
+    fn sql_safety_rejects_load_extension() {
+        assert!(validate_sql("SELECT load_extension('evil.so')").is_err());
+        assert!(validate_sql("SELECT LOAD_EXTENSION('/tmp/lib')").is_err());
+    }
+
+    #[test]
+    fn sql_safety_allows_normal_queries() {
+        assert!(validate_sql("SELECT * FROM users WHERE id = 1").is_ok());
+        assert!(validate_sql("INSERT INTO logs (msg) VALUES ('hello')").is_ok());
+        assert!(validate_sql("CREATE TABLE t (id INTEGER PRIMARY KEY)").is_ok());
     }
 }
