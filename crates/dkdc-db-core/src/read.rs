@@ -10,20 +10,26 @@ use crate::schema;
 
 pub struct ReadEngine {
     ctx: SessionContext,
-    conn: libsql::Connection,
+    db: turso::Database,
 }
 
 impl ReadEngine {
-    pub fn new(conn: libsql::Connection) -> Self {
+    pub fn new(db: turso::Database) -> Self {
         Self {
             ctx: SessionContext::new(),
-            conn,
+            db,
         }
+    }
+
+    /// Create a fresh connection for this operation.
+    fn connect(&self) -> Result<turso::Connection> {
+        Ok(self.db.connect()?)
     }
 
     /// Register all user tables from the database with DataFusion.
     pub async fn register_tables(&self) -> Result<()> {
-        let tables = schema::list_tables(&self.conn).await?;
+        let conn = self.connect()?;
+        let tables = schema::list_tables(&conn).await?;
         for table_name in &tables {
             self.register_table(table_name).await?;
         }
@@ -32,10 +38,11 @@ impl ReadEngine {
 
     /// Register a single table with DataFusion.
     async fn register_table(&self, table_name: &str) -> Result<()> {
-        let columns = schema::introspect_table(&self.conn, table_name).await?;
+        let conn = self.connect()?;
+        let columns = schema::introspect_table(&conn, table_name).await?;
         let arrow_schema = schema::build_arrow_schema(&columns);
         let provider =
-            SqliteTableProvider::new(table_name.to_string(), arrow_schema, self.conn.clone());
+            SqliteTableProvider::new(table_name.to_string(), arrow_schema, self.db.clone());
         self.ctx
             .register_table(table_name, Arc::new(provider))
             .map_err(|e| Error::Schema(format!("failed to register table '{table_name}': {e}")))?;
@@ -44,7 +51,6 @@ impl ReadEngine {
 
     /// Refresh schema: deregister all tables then re-register.
     pub async fn refresh_schema(&self) -> Result<()> {
-        // Deregister existing tables
         for catalog_name in self.ctx.catalog_names() {
             if let Some(catalog) = self.ctx.catalog(&catalog_name) {
                 for schema_name in catalog.schema_names() {
@@ -73,9 +79,5 @@ impl ReadEngine {
     /// Get a DataFusion DataFrame for a table.
     pub async fn table(&self, name: &str) -> Result<datafusion::dataframe::DataFrame> {
         Ok(self.ctx.table(name).await?)
-    }
-
-    pub fn conn(&self) -> &libsql::Connection {
-        &self.conn
     }
 }

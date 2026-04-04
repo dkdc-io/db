@@ -33,7 +33,7 @@ pub fn sqlite_type_to_arrow(declared_type: Option<&str>) -> DataType {
 
 /// Introspect a table's schema via PRAGMA table_info.
 pub async fn introspect_table(
-    conn: &libsql::Connection,
+    conn: &turso::Connection,
     table_name: &str,
 ) -> Result<Vec<ColumnInfo>> {
     let sql = format!("PRAGMA table_info('{table_name}')");
@@ -69,7 +69,7 @@ pub fn build_arrow_schema(columns: &[ColumnInfo]) -> SchemaRef {
 }
 
 /// List all user tables in the database.
-pub async fn list_tables(conn: &libsql::Connection) -> Result<Vec<String>> {
+pub async fn list_tables(conn: &turso::Connection) -> Result<Vec<String>> {
     let mut rows = conn
         .query(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",

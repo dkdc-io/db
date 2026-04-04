@@ -1,6 +1,6 @@
 # dkdc-db
 
-HTAP embedded database: writes enforced via libSQL, reads via DataFusion on a WAL-mode replica connection. Client/server architecture — all access goes through the REST API.
+HTAP embedded database: writes enforced via turso, reads via DataFusion on a WAL-mode replica connection. Client/server architecture — all access goes through the REST API.
 
 ## architecture
 
@@ -10,23 +10,38 @@ crates/
   dkdc-db-server/     # binary "db-server": axum REST API wrapping core
   dkdc-db-client/     # library: HTTP client (reqwest) with same API shape
   dkdc-db-cli/        # binary "db": REPL + commands, uses client + dkdc-sh for tmux
+  dkdc-db-bench/      # binary: network load testing (not published)
 ```
 
-- Server owns the database file, wraps dkdc-db-core
+- Server owns the database, wraps dkdc-db-core
 - Client talks to server over REST (JSON), never touches SQLite directly
 - Tmux pattern (via `dkdc-sh`): `db serve` launches the server in a tmux session (`dkdc-db`), `db stop/attach/logs/status` manage it. `db serve --foreground` skips tmux (used by tmux itself).
-- Writes go through libSQL (single read-write connection)
-- Reads go through DataFusion (SessionContext + SqliteTableProvider)
-- Same database file, WAL mode enables concurrent reader + writer
+- Writes go through turso (single read-write connection)
+- Reads go through DataFusion (SessionContext + SqliteTableProvider) or turso fast path
+- WAL mode enables concurrent reader + writer
 - Schema auto-refreshes after DDL statements
-- Default database location: `~/.dkdc/db/*.db` (via `dkdc-home`)
+- Per-request connections from `turso::Database` — supports concurrent reads
+
+### storage
+
+- `db serve` — in-memory (default, no persistence)
+- `db serve --db mydb` — file-backed at `~/.dkdc/db/mydb.db`
+- `db serve --db project/mydb` — nested path at `~/.dkdc/db/project/mydb.db` (dirs created automatically)
+- `db list` — lists all databases under `~/.dkdc/db/`, including nested
+
+### query paths
+
+Two read paths — use the right one:
+
+- **`query()` / `POST /query`** — routes through DataFusion. Best for joins, aggregations, window functions, analytical queries. Higher latency (~7-10ms) due to query planning.
+- **`query_oltp()` / `POST /query/oltp`** — direct turso execution. Best for point lookups, simple SELECTs. ~15-50x faster than DataFusion path for simple queries (~0.4ms).
 
 ### REST API
 
 ```
 POST /execute        { "sql": "..." }  → { "affected": N }
-POST /query          { "sql": "..." }  → { "columns": [...], "rows": [...] }
-POST /query/libsql   { "sql": "..." }  → { "columns": [...], "rows": [...] }
+POST /query          { "sql": "..." }  → { "columns": [...], "rows": [...] }  (DataFusion)
+POST /query/oltp    { "sql": "..." }  → { "columns": [...], "rows": [...] }  (fast path)
 GET  /tables                           → ["table1", "table2"]
 GET  /schema/:table                    → { "columns": [...], "rows": [...] }
 GET  /health                           → { "status": "ok" }
@@ -55,6 +70,7 @@ Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 - Rust stable toolchain (edition 2024)
 - No `unwrap()` in library code, all errors via `Result`
 - `execute()` for writes only, `query()` for reads only (enforced)
-- `query()` always routes through DataFusion
-- `query_libsql()` for explicit libSQL fast path
+- `query()` always routes through DataFusion (analytical)
+- `query_oltp()` for low-latency simple reads (fast path)
+- Default is in-memory; use `--db name` for persistence
 - Client requires server running; all access through HTTP API

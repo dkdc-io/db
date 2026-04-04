@@ -1,7 +1,7 @@
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("libSQL error: {0}")]
-    LibSql(#[from] libsql::Error),
+    #[error("turso error: {0}")]
+    Turso(#[from] turso::Error),
 
     #[error("DataFusion error: {0}")]
     DataFusion(#[from] datafusion::error::DataFusionError),

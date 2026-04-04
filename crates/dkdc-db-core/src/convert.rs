@@ -6,9 +6,9 @@ use arrow::record_batch::RecordBatch;
 
 use crate::error::Result;
 
-/// Convert libSQL rows into an Arrow RecordBatch.
+/// Convert turso rows into an Arrow RecordBatch.
 pub async fn rows_to_record_batch(
-    rows: &mut libsql::Rows,
+    rows: &mut turso::Rows,
     schema: SchemaRef,
 ) -> Result<RecordBatch> {
     let num_cols = schema.fields().len();
@@ -20,8 +20,41 @@ pub async fn rows_to_record_batch(
 
     while let Some(row) = rows.next().await? {
         for (i, builder) in builders.iter_mut().enumerate() {
-            let idx = i as i32;
-            builder.append_value(&row, idx)?;
+            builder.append_value(&row, i)?;
+        }
+    }
+
+    let arrays: Vec<ArrayRef> = builders.into_iter().map(|b| b.finish()).collect();
+
+    if arrays.is_empty() || (num_cols > 0 && arrays[0].is_empty()) {
+        return Ok(RecordBatch::new_empty(schema));
+    }
+
+    Ok(RecordBatch::try_new(schema, arrays)?)
+}
+
+/// Convert turso rows into an Arrow RecordBatch, including an already-consumed first row.
+pub async fn rows_to_record_batch_with_first(
+    first_row: &turso::Row,
+    rows: &mut turso::Rows,
+    schema: SchemaRef,
+) -> Result<RecordBatch> {
+    let num_cols = schema.fields().len();
+    let mut builders: Vec<ColumnBuilder> = schema
+        .fields()
+        .iter()
+        .map(|f| ColumnBuilder::new(f.data_type()))
+        .collect();
+
+    // Append the first row
+    for (i, builder) in builders.iter_mut().enumerate() {
+        builder.append_value(first_row, i)?;
+    }
+
+    // Append remaining rows
+    while let Some(row) = rows.next().await? {
+        for (i, builder) in builders.iter_mut().enumerate() {
+            builder.append_value(&row, i)?;
         }
     }
 
@@ -51,31 +84,31 @@ impl ColumnBuilder {
         }
     }
 
-    fn append_value(&mut self, row: &libsql::Row, idx: i32) -> Result<()> {
+    fn append_value(&mut self, row: &turso::Row, idx: usize) -> Result<()> {
         let value = row.get_value(idx)?;
         match (self, value) {
-            (Self::Int64(b), libsql::Value::Integer(v)) => b.append_value(v),
-            (Self::Int64(b), libsql::Value::Null) => b.append_null(),
-            (Self::Int64(b), libsql::Value::Real(v)) => b.append_value(v as i64),
-            (Self::Int64(b), libsql::Value::Text(v)) => {
+            (Self::Int64(b), turso::Value::Integer(v)) => b.append_value(v),
+            (Self::Int64(b), turso::Value::Null) => b.append_null(),
+            (Self::Int64(b), turso::Value::Real(v)) => b.append_value(v as i64),
+            (Self::Int64(b), turso::Value::Text(v)) => {
                 b.append_value(v.parse::<i64>().unwrap_or(0))
             }
 
-            (Self::Float64(b), libsql::Value::Real(v)) => b.append_value(v),
-            (Self::Float64(b), libsql::Value::Null) => b.append_null(),
-            (Self::Float64(b), libsql::Value::Integer(v)) => b.append_value(v as f64),
-            (Self::Float64(b), libsql::Value::Text(v)) => {
+            (Self::Float64(b), turso::Value::Real(v)) => b.append_value(v),
+            (Self::Float64(b), turso::Value::Null) => b.append_null(),
+            (Self::Float64(b), turso::Value::Integer(v)) => b.append_value(v as f64),
+            (Self::Float64(b), turso::Value::Text(v)) => {
                 b.append_value(v.parse::<f64>().unwrap_or(0.0))
             }
 
-            (Self::Utf8(b), libsql::Value::Text(v)) => b.append_value(&v),
-            (Self::Utf8(b), libsql::Value::Null) => b.append_null(),
-            (Self::Utf8(b), libsql::Value::Integer(v)) => b.append_value(v.to_string()),
-            (Self::Utf8(b), libsql::Value::Real(v)) => b.append_value(v.to_string()),
+            (Self::Utf8(b), turso::Value::Text(v)) => b.append_value(&v),
+            (Self::Utf8(b), turso::Value::Null) => b.append_null(),
+            (Self::Utf8(b), turso::Value::Integer(v)) => b.append_value(v.to_string()),
+            (Self::Utf8(b), turso::Value::Real(v)) => b.append_value(v.to_string()),
 
-            (Self::Binary(b), libsql::Value::Blob(v)) => b.append_value(&v),
-            (Self::Binary(b), libsql::Value::Null) => b.append_null(),
-            (Self::Binary(b), libsql::Value::Text(v)) => b.append_value(v.as_bytes()),
+            (Self::Binary(b), turso::Value::Blob(v)) => b.append_value(&v),
+            (Self::Binary(b), turso::Value::Null) => b.append_null(),
+            (Self::Binary(b), turso::Value::Text(v)) => b.append_value(v.as_bytes()),
 
             // Fallback: null for any unexpected combination
             (Self::Int64(b), _) => b.append_null(),

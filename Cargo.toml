@@ -4,6 +4,7 @@ members = [
     "crates/dkdc-db-server",
     "crates/dkdc-db-client",
     "crates/dkdc-db-cli",
+    "crates/dkdc-db-bench",
 ]
 resolver = "2"
 

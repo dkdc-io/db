@@ -221,10 +221,10 @@ fn bench_scan_full(c: &mut Criterion) {
             })
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
             b.iter(|| {
                 rt.block_on(async {
-                    db.query_libsql("SELECT * FROM sales").await.unwrap();
+                    db.query_oltp("SELECT * FROM sales").await.unwrap();
                 })
             })
         });
@@ -248,10 +248,10 @@ fn bench_scan_projected(c: &mut Criterion) {
             })
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
             b.iter(|| {
                 rt.block_on(async {
-                    db.query_libsql("SELECT region, amount FROM sales")
+                    db.query_oltp("SELECT region, amount FROM sales")
                         .await
                         .unwrap();
                 })
@@ -275,8 +275,8 @@ fn bench_agg_simple(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -297,8 +297,8 @@ fn bench_agg_complex(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -321,8 +321,8 @@ fn bench_agg_many_groups(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -344,8 +344,8 @@ fn bench_join_two_tables(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -370,8 +370,8 @@ fn bench_join_three_tables(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -415,8 +415,8 @@ fn bench_subquery(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -437,8 +437,8 @@ fn bench_filter_scan(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();
@@ -458,8 +458,8 @@ fn bench_orderby_limit(c: &mut Criterion) {
             b.iter(|| rt.block_on(async { db.query(sql).await.unwrap() }))
         });
 
-        group.bench_with_input(BenchmarkId::new("libsql", size), &size, |b, _| {
-            b.iter(|| rt.block_on(async { db.query_libsql(sql).await.unwrap() }))
+        group.bench_with_input(BenchmarkId::new("oltp", size), &size, |b, _| {
+            b.iter(|| rt.block_on(async { db.query_oltp(sql).await.unwrap() }))
         });
     }
     group.finish();

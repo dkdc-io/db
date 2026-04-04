@@ -44,11 +44,8 @@ async fn concurrent_write_and_read() {
         assert_eq!(count, 1000, "Reader should see all 1000 rows");
     }
 
-    // Verify via libSQL too
-    let ls_batches = db
-        .query_libsql("SELECT count(*) FROM counter")
-        .await
-        .unwrap();
+    // Verify via turso too
+    let ls_batches = db.query_oltp("SELECT count(*) FROM counter").await.unwrap();
     let ls_cnt = ls_batches[0]
         .column(0)
         .as_any()

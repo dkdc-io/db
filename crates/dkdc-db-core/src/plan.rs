@@ -19,7 +19,7 @@ pub struct SqliteScanExec {
     projected_schema: SchemaRef,
     full_schema: SchemaRef,
     projection: Option<Vec<usize>>,
-    conn: libsql::Connection,
+    db: turso::Database,
     props: Arc<PlanProperties>,
 }
 
@@ -28,7 +28,7 @@ impl SqliteScanExec {
         table_name: String,
         full_schema: SchemaRef,
         projection: Option<Vec<usize>>,
-        conn: libsql::Connection,
+        db: turso::Database,
     ) -> Self {
         let projected_schema = match &projection {
             Some(proj) if !proj.is_empty() => {
@@ -51,7 +51,7 @@ impl SqliteScanExec {
             projected_schema,
             full_schema,
             projection,
-            conn,
+            db,
             props,
         }
     }
@@ -125,14 +125,18 @@ impl ExecutionPlan for SqliteScanExec {
             columns.join(", ")
         };
 
-        let conn = self.conn.clone();
+        let db = self.db.clone();
         let schema = self.projected_schema.clone();
         let schema_for_stream = self.projected_schema.clone();
         let table_name = self.table_name.clone();
 
         let stream = futures::stream::once(async move {
+            // Create a fresh connection for this scan to support concurrent reads
+            let conn = db
+                .connect()
+                .map_err(|e| datafusion::error::DataFusionError::External(Box::new(e)))?;
+
             if is_empty_projection {
-                // Empty projection: DataFusion just needs row count (e.g., for COUNT(*))
                 let count_sql = format!("SELECT count(*) FROM \"{table_name}\"");
                 let mut rows = conn
                     .query(&count_sql, ())
@@ -149,7 +153,6 @@ impl ExecutionPlan for SqliteScanExec {
                 } else {
                     0
                 };
-                // Return a batch with 0 columns but correct row count
                 let options =
                     arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(row_count));
                 Ok::<RecordBatch, datafusion::error::DataFusionError>(
