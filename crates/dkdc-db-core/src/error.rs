@@ -21,6 +21,9 @@ pub enum Error {
     #[error("read attempted through write path: {0}")]
     ReadOnWritePath(String),
 
+    #[error("config error: {0}")]
+    Config(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }

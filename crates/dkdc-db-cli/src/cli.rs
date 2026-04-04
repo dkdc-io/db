@@ -41,6 +41,14 @@ pub enum Commands {
         #[arg(short, long, default_value_t = 50)]
         lines: usize,
     },
+    /// Generate a starter db.toml in the current directory
+    Init,
+    /// Bootstrap databases/tables from config without starting the server
+    Bootstrap {
+        /// Path to config file (default: auto-discover db.toml)
+        #[arg(long)]
+        config: Option<String>,
+    },
     /// Create a new database
     Create {
         /// Database name

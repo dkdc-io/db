@@ -13,6 +13,7 @@ use crate::config::DbConfig;
 use crate::db::DkdcDb;
 use crate::error::{self, Error, Result};
 use crate::router;
+use crate::toml_config::DbTomlConfig;
 
 struct ManagedDb {
     db: DkdcDb,
@@ -189,6 +190,37 @@ impl DbManager {
             .db
             .query_oltp(&sql)
             .await
+    }
+
+    /// Bootstrap databases and tables from a parsed config.
+    /// Creates missing databases, runs CREATE TABLE/INDEX IF NOT EXISTS.
+    /// Safe to call multiple times (idempotent).
+    pub async fn bootstrap(&self, config: &DbTomlConfig) -> Result<()> {
+        for (db_name, db_config) in &config.databases {
+            // Create database if it doesn't exist (ignore "already exists" error)
+            match self.create_db(db_name).await {
+                Ok(()) => tracing::info!("created database: {db_name}"),
+                Err(Error::Schema(msg)) if msg.contains("already exists") => {
+                    // Ensure it's loaded
+                    self.ensure_db(db_name).await?;
+                    tracing::debug!("database already exists: {db_name}");
+                }
+                Err(e) => return Err(e),
+            }
+
+            // Run table creation SQL
+            for (table_name, table_config) in &db_config.tables {
+                self.execute(db_name, &table_config.sql).await?;
+                tracing::info!("bootstrapped table: {db_name}.{table_name}");
+
+                // Run index creation SQL
+                for (idx_name, idx_sql) in &table_config.indexes {
+                    self.execute(db_name, idx_sql).await?;
+                    tracing::info!("bootstrapped index: {db_name}.{table_name}.{idx_name}");
+                }
+            }
+        }
+        Ok(())
     }
 
     // -- internal --
