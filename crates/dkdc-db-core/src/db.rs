@@ -7,6 +7,20 @@ use crate::router;
 use crate::schema;
 use crate::write::WriteEngine;
 
+/// Try to extract a table name from a simple SELECT query for PRAGMA fallback.
+/// Handles `SELECT ... FROM table_name` patterns.
+fn extract_table_name(sql: &str) -> Option<String> {
+    let upper = sql.to_uppercase();
+    let from_idx = upper.find(" FROM ")?;
+    let after_from = sql[from_idx + 6..].trim_start();
+    // Take the first word (table name), stop at whitespace, comma, semicolon, or parenthesis
+    let name: String = after_from
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if name.is_empty() { None } else { Some(name) }
+}
+
 pub struct DkdcDb {
     write: WriteEngine,
     db: turso::Database,
@@ -85,6 +99,7 @@ impl DkdcDb {
 
         // Infer Arrow types from the first row's values
         let mut fields = Vec::new();
+        let mut has_nulls = false;
         for (i, name) in col_names.iter().enumerate() {
             let value = first_row.get_value(i)?;
             let dt = match value {
@@ -92,10 +107,45 @@ impl DkdcDb {
                 turso::Value::Real(_) => arrow::datatypes::DataType::Float64,
                 turso::Value::Text(_) => arrow::datatypes::DataType::Utf8,
                 turso::Value::Blob(_) => arrow::datatypes::DataType::Binary,
-                turso::Value::Null => arrow::datatypes::DataType::Utf8,
+                turso::Value::Null => {
+                    has_nulls = true;
+                    arrow::datatypes::DataType::Utf8 // placeholder, may be refined below
+                }
             };
             fields.push(arrow::datatypes::Field::new(name, dt, true));
         }
+
+        // If any columns were NULL, try to refine types via PRAGMA table_info
+        if has_nulls {
+            if let Some(table_name) = extract_table_name(sql) {
+                if let Ok(columns) = schema::introspect_table(&conn, &table_name).await {
+                    // Build a name->type map from the schema
+                    let type_map: std::collections::HashMap<&str, &arrow::datatypes::DataType> =
+                        columns
+                            .iter()
+                            .map(|c| (c.name.as_str(), &c.data_type))
+                            .collect();
+                    for field in &mut fields {
+                        if first_row
+                            .get_value(
+                                col_names
+                                    .iter()
+                                    .position(|n| n == field.name())
+                                    .unwrap_or(0),
+                            )
+                            .map(|v| matches!(v, turso::Value::Null))
+                            .unwrap_or(false)
+                        {
+                            if let Some(&dt) = type_map.get(field.name().as_str()) {
+                                *field =
+                                    arrow::datatypes::Field::new(field.name(), dt.clone(), true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let schema = std::sync::Arc::new(arrow::datatypes::Schema::new(fields));
 
         let batch = rows_to_record_batch_with_first(&first_row, &mut rows, schema).await?;

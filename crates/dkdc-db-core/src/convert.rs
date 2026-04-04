@@ -90,16 +90,18 @@ impl ColumnBuilder {
             (Self::Int64(b), turso::Value::Integer(v)) => b.append_value(v),
             (Self::Int64(b), turso::Value::Null) => b.append_null(),
             (Self::Int64(b), turso::Value::Real(v)) => b.append_value(v as i64),
-            (Self::Int64(b), turso::Value::Text(v)) => {
-                b.append_value(v.parse::<i64>().unwrap_or(0))
-            }
+            (Self::Int64(b), turso::Value::Text(v)) => match v.parse::<i64>() {
+                Ok(n) => b.append_value(n),
+                Err(_) => b.append_null(),
+            },
 
             (Self::Float64(b), turso::Value::Real(v)) => b.append_value(v),
             (Self::Float64(b), turso::Value::Null) => b.append_null(),
             (Self::Float64(b), turso::Value::Integer(v)) => b.append_value(v as f64),
-            (Self::Float64(b), turso::Value::Text(v)) => {
-                b.append_value(v.parse::<f64>().unwrap_or(0.0))
-            }
+            (Self::Float64(b), turso::Value::Text(v)) => match v.parse::<f64>() {
+                Ok(n) => b.append_value(n),
+                Err(_) => b.append_null(),
+            },
 
             (Self::Utf8(b), turso::Value::Text(v)) => b.append_value(&v),
             (Self::Utf8(b), turso::Value::Null) => b.append_null(),

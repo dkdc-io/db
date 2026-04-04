@@ -8,7 +8,6 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use dkdc_db_core::DbManager;
 use serde::{Deserialize, Serialize};
-use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
 /// Max request body size: 16 MB
@@ -32,11 +31,22 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(health))
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            REQUEST_TIMEOUT,
-        ))
+        .layer(axum::middleware::from_fn(timeout_middleware))
         .with_state(state)
+}
+
+async fn timeout_middleware(
+    req: axum::http::Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> impl IntoResponse {
+    match tokio::time::timeout(REQUEST_TIMEOUT, next.run(req)).await {
+        Ok(response) => response.into_response(),
+        Err(_) => error_response(
+            StatusCode::REQUEST_TIMEOUT,
+            format!("request timed out after {}s", REQUEST_TIMEOUT.as_secs()),
+        )
+        .into_response(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -78,6 +88,22 @@ fn error_response(status: StatusCode, msg: impl ToString) -> impl IntoResponse {
             error: msg.to_string(),
         }),
     )
+}
+
+/// Classify a dkdc_db_core::Error into an appropriate HTTP status code.
+fn classify_error(e: &dkdc_db_core::Error) -> StatusCode {
+    match e {
+        dkdc_db_core::Error::Validation(_)
+        | dkdc_db_core::Error::WriteOnReadPath(_)
+        | dkdc_db_core::Error::ReadOnWritePath(_) => StatusCode::BAD_REQUEST,
+        dkdc_db_core::Error::Schema(msg) if msg.contains("not found") => StatusCode::NOT_FOUND,
+        dkdc_db_core::Error::Schema(msg) if msg.contains("already exists") => StatusCode::CONFLICT,
+        dkdc_db_core::Error::Schema(_) => StatusCode::BAD_REQUEST,
+        dkdc_db_core::Error::Turso(_)
+        | dkdc_db_core::Error::DataFusion(_)
+        | dkdc_db_core::Error::Arrow(_)
+        | dkdc_db_core::Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }
 
 fn batches_to_response(batches: &[dkdc_db_core::RecordBatch]) -> QueryResponse {
@@ -149,7 +175,7 @@ async fn create_db(
         }
         Err(e) => {
             tracing::warn!(db = %req.name, error = %e, "create_db failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
@@ -162,7 +188,7 @@ async fn drop_db(State(mgr): State<AppState>, Path(name): Path<String>) -> impl 
         }
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "drop_db failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
@@ -184,7 +210,7 @@ async fn execute(
         }
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "execute failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
@@ -194,7 +220,7 @@ async fn query(State(mgr): State<AppState>, Json(req): Json<SqlRequest>) -> impl
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => {
             tracing::warn!(error = %e, "query failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
@@ -208,7 +234,7 @@ async fn query_oltp(
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "query_oltp failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
@@ -218,7 +244,7 @@ async fn list_tables(State(mgr): State<AppState>, Path(name): Path<String>) -> i
         Ok(tables) => (StatusCode::OK, Json(tables)).into_response(),
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "list_tables failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
@@ -231,7 +257,7 @@ async fn table_schema(
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => {
             tracing::warn!(db = %name, table = %table, error = %e, "table_schema failed");
-            error_response(StatusCode::BAD_REQUEST, e).into_response()
+            error_response(classify_error(&e), e).into_response()
         }
     }
 }
