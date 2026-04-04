@@ -2,7 +2,8 @@ use arrow::record_batch::RecordBatch;
 
 use crate::config::DbConfig;
 use crate::convert::rows_to_record_batch_with_first;
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::router;
 use crate::schema;
 use crate::write::WriteEngine;
 
@@ -57,6 +58,9 @@ impl DkdcDb {
 
     /// OLTP fast-path read. Direct turso execution, no DataFusion.
     pub async fn query_oltp(&self, sql: &str) -> Result<Vec<RecordBatch>> {
+        if router::is_write(sql) {
+            return Err(Error::WriteOnReadPath(sql.to_string()));
+        }
         let conn = self.db.connect()?;
         let mut rows = conn.query(sql, ()).await?;
 

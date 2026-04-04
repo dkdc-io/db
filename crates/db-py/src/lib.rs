@@ -8,10 +8,6 @@ fn to_py_err(e: dkdc_db_client::Error) -> PyErr {
     PyErr::new::<PyRuntimeError, _>(e.to_string())
 }
 
-fn runtime() -> tokio::runtime::Runtime {
-    tokio::runtime::Runtime::new().expect("failed to create tokio runtime")
-}
-
 fn json_value_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py<PyAny>> {
     match val {
         serde_json::Value::Null => Ok(py.None()),
@@ -93,6 +89,7 @@ fn query_response_to_py(py: Python<'_>, resp: QueryResponse) -> PyResult<Py<PyAn
 #[pyclass]
 struct Db {
     client: DbClient,
+    rt: tokio::runtime::Runtime,
 }
 
 #[pymethods]
@@ -102,62 +99,63 @@ impl Db {
     fn new(url: &str) -> Self {
         Self {
             client: DbClient::new(url),
+            rt: tokio::runtime::Runtime::new().expect("failed to create tokio runtime"),
         }
     }
 
     fn create_db(&self, name: &str) -> PyResult<()> {
-        runtime()
+        self.rt
             .block_on(self.client.create_db(name))
             .map_err(to_py_err)
     }
 
     fn drop_db(&self, name: &str) -> PyResult<()> {
-        runtime()
+        self.rt
             .block_on(self.client.drop_db(name))
             .map_err(to_py_err)
     }
 
     fn list_dbs(&self) -> PyResult<Vec<String>> {
-        runtime()
+        self.rt
             .block_on(self.client.list_dbs())
             .map_err(to_py_err)
     }
 
     fn execute(&self, db: &str, sql: &str) -> PyResult<u64> {
-        runtime()
+        self.rt
             .block_on(self.client.execute(db, sql))
             .map_err(to_py_err)
     }
 
     fn query(&self, py: Python<'_>, sql: &str) -> PyResult<Py<PyAny>> {
-        let resp = runtime()
+        let resp = self.rt
             .block_on(self.client.query(sql))
             .map_err(to_py_err)?;
         query_response_to_py(py, resp)
     }
 
     fn query_oltp(&self, py: Python<'_>, db: &str, sql: &str) -> PyResult<Py<PyAny>> {
-        let resp = runtime()
+        let resp = self.rt
             .block_on(self.client.query_oltp(db, sql))
             .map_err(to_py_err)?;
         query_response_to_py(py, resp)
     }
 
     fn list_tables(&self, db: &str) -> PyResult<Vec<String>> {
-        runtime()
+        self.rt
             .block_on(self.client.list_tables(db))
             .map_err(to_py_err)
     }
 
     fn table_schema(&self, py: Python<'_>, db: &str, table: &str) -> PyResult<Py<PyAny>> {
-        let resp = runtime()
+        let resp = self.rt
             .block_on(self.client.table_schema(db, table))
             .map_err(to_py_err)?;
         query_response_to_py(py, resp)
     }
 
     fn health(&self) -> PyResult<bool> {
-        runtime()
+        self.rt
             .block_on(self.client.health())
             .map_err(to_py_err)
     }
