@@ -189,9 +189,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a07d1f37ff60921c83bdfc7407723bdefe89b44b98a9b772f225c8f9d67141a6"
+checksum = "6a3a1fd6f75306b68087b831f025c712524bcb19aad54e557b1129cfa0a2b207"
 dependencies = [
  "rustversion",
 ]
@@ -1790,7 +1790,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1806,7 +1806,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1822,7 +1822,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrow",
  "async-trait",
@@ -1837,7 +1837,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-py"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dkdc-db-cli",
  "dkdc-db-client",
@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrow",
  "axum",
@@ -1857,6 +1857,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tower-http",
  "tracing",
 ]
 
@@ -4500,9 +4501,11 @@ dependencies = [
  "http-body",
  "iri-string",
  "pin-project-lite",
+ "tokio",
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
