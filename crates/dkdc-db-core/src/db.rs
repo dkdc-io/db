@@ -68,12 +68,14 @@ impl DkdcDb {
         Ok(result)
     }
 
-    /// Execute a read query through DataFusion. Always routes through DataFusion.
+    /// Execute a read query through DataFusion (analytical engine).
+    /// Best for: joins, aggregations, window functions, complex analytical queries.
     pub async fn query(&self, sql: &str) -> Result<Vec<RecordBatch>> {
         self.read.query(sql).await
     }
 
-    /// Execute a read query directly through turso (fast path for point reads).
+    /// Execute a read query directly through turso (fast path).
+    /// Best for: point lookups, simple SELECTs, low-latency reads (~15-50x faster than `query`).
     pub async fn query_turso(&self, sql: &str) -> Result<Vec<RecordBatch>> {
         let conn = self.db.connect()?;
         let mut rows = conn.query(sql, ()).await?;

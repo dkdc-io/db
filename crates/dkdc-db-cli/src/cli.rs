@@ -13,9 +13,11 @@ pub struct Cli {
 pub enum Commands {
     /// Start the database server (in tmux)
     Serve {
-        /// Database name (stored at ~/.dkdc/db/{name}.db)
-        #[arg(long, default_value = "default")]
-        db: String,
+        /// Database name or path (stored at ~/.dkdc/db/{name}.db).
+        /// Supports nested names like "project/mydb".
+        /// Omit for in-memory database (no persistence).
+        #[arg(long)]
+        db: Option<String>,
 
         /// Host to bind to
         #[arg(long, default_value = "127.0.0.1")]

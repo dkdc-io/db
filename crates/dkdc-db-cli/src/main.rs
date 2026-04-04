@@ -21,15 +21,31 @@ async fn main() -> anyhow::Result<()> {
             foreground,
         }) => {
             if foreground {
-                let database = dkdc_db_core::DkdcDb::open(&db).await?;
+                let database = match &db {
+                    Some(name) => dkdc_db_core::DkdcDb::open(name).await?,
+                    None => dkdc_db_core::DkdcDb::open_in_memory().await?,
+                };
+                let mode = match &db {
+                    Some(name) => format!("file:{name}"),
+                    None => "in-memory".to_string(),
+                };
+                println!("mode: {mode}");
                 dkdc_db_server::serve(database, &host, port).await?;
             } else {
                 if dkdc_sh::tmux::has_session(TMUX_SESSION) {
                     anyhow::bail!("dkdc-db already running in tmux session '{TMUX_SESSION}'");
                 }
-                let cmd = format!("db serve --foreground --db {db} --host {host} --port {port}");
+                let db_flag = match &db {
+                    Some(name) => format!(" --db {name}"),
+                    None => String::new(),
+                };
+                let cmd = format!("db serve --foreground{db_flag} --host {host} --port {port}");
                 dkdc_sh::tmux::new_session(TMUX_SESSION, &cmd)?;
-                println!("dkdc-db server started in tmux session '{TMUX_SESSION}'");
+                let mode = match &db {
+                    Some(name) => format!("file:{name}"),
+                    None => "in-memory".to_string(),
+                };
+                println!("dkdc-db server started ({mode}) in tmux session '{TMUX_SESSION}'");
                 println!();
                 println!("Commands:");
                 println!("  db attach    # View server output");
@@ -110,16 +126,24 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::List) => {
             let db_dir = dkdc_home::ensure("db")?;
             let mut found = false;
-            for entry in std::fs::read_dir(db_dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "db") {
-                    if let Some(stem) = path.file_stem() {
-                        println!("{}", stem.to_string_lossy());
-                        found = true;
+            fn walk(dir: &std::path::Path, base: &std::path::Path, found: &mut bool) {
+                let Ok(entries) = std::fs::read_dir(dir) else {
+                    return;
+                };
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        walk(&path, base, found);
+                    } else if path.extension().is_some_and(|ext| ext == "db") {
+                        if let Ok(rel) = path.strip_prefix(base) {
+                            let name = rel.with_extension("");
+                            println!("{}", name.display());
+                            *found = true;
+                        }
                     }
                 }
             }
+            walk(&db_dir, &db_dir, &mut found);
             if !found {
                 println!("(no databases found)");
             }
