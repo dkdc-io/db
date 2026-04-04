@@ -6,6 +6,28 @@ use clap::Parser;
 use cli::{Cli, Commands, TMUX_SESSION};
 use dkdc_db_client::DbClient;
 
+const INIT_TEMPLATE: &str = r#"# dkdc-db configuration
+# https://github.com/dkdc-io/db
+
+[server]
+# host = "127.0.0.1"
+# port = 4200
+
+[databases.mydb]
+
+[databases.mydb.tables.example]
+sql = """
+CREATE TABLE IF NOT EXISTS example (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+"""
+
+# [databases.mydb.tables.example.indexes]
+# idx_example_name = "CREATE INDEX IF NOT EXISTS idx_example_name ON example (name)"
+"#;
+
 pub fn run() {
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     rt.block_on(async_main()).unwrap();
@@ -26,9 +48,38 @@ async fn async_main() -> anyhow::Result<()> {
             foreground,
         }) => {
             if foreground {
+                // Load optional config
+                let config = dkdc_db_core::toml_config::DbTomlConfig::load()?;
+
+                // Apply server config (CLI flags override config file)
+                let (effective_host, effective_port) = match &config {
+                    Some(c) => {
+                        let h = if host != "127.0.0.1" {
+                            host.clone()
+                        } else {
+                            c.server.host.clone()
+                        };
+                        let p = if port != 4200 { port } else { c.server.port };
+                        (h, p)
+                    }
+                    None => (host.clone(), port),
+                };
+
                 let manager = Arc::new(dkdc_db_core::DbManager::new().await?);
+
+                // Bootstrap from config if present
+                if let Some(ref c) = config {
+                    let db_count = c.databases.len();
+                    let table_count: usize = c.databases.values().map(|d| d.tables.len()).sum();
+                    println!(
+                        "bootstrapping from config: {db_count} database(s), {table_count} table(s)"
+                    );
+                    manager.bootstrap(c).await?;
+                    println!("bootstrap complete");
+                }
+
                 println!("mode: multi-database (manages ~/.dkdc/db/)");
-                dkdc_db_server::serve(manager, &host, port).await?;
+                dkdc_db_server::serve(manager, &effective_host, effective_port).await?;
             } else {
                 if dkdc_sh::tmux::has_session(TMUX_SESSION) {
                     anyhow::bail!("dkdc-db already running in tmux session '{TMUX_SESSION}'");
@@ -45,6 +96,30 @@ async fn async_main() -> anyhow::Result<()> {
                 println!("  db status    # Check server status");
                 println!("  db stop      # Stop server");
             }
+        }
+        Some(Commands::Init) => {
+            let path = std::path::Path::new("db.toml");
+            if path.exists() {
+                anyhow::bail!("db.toml already exists in current directory");
+            }
+            std::fs::write(path, INIT_TEMPLATE)?;
+            println!("created db.toml");
+        }
+        Some(Commands::Bootstrap { config }) => {
+            let cfg = match config {
+                Some(path) => {
+                    dkdc_db_core::toml_config::DbTomlConfig::load_from(std::path::Path::new(&path))?
+                }
+                None => dkdc_db_core::toml_config::DbTomlConfig::load()?.ok_or_else(|| {
+                    anyhow::anyhow!("no db.toml found in CWD or ~/.dkdc/db/config.toml")
+                })?,
+            };
+            let manager = Arc::new(dkdc_db_core::DbManager::new().await?);
+            let db_count = cfg.databases.len();
+            let table_count: usize = cfg.databases.values().map(|d| d.tables.len()).sum();
+            println!("bootstrapping: {db_count} database(s), {table_count} table(s)");
+            manager.bootstrap(&cfg).await?;
+            println!("bootstrap complete");
         }
         Some(Commands::Stop) => {
             if !dkdc_sh::tmux::has_session(TMUX_SESSION) {

@@ -30,6 +30,39 @@ py/
 - Lazy loading: on startup, server discovers `.db` files but doesn't open them until first access
 - Python bindings wrap `DbClient` (HTTP client) — async bridged via `tokio::runtime::Runtime::block_on()`
 
+### config-driven bootstrap
+
+Declarative `db.toml` config bootstraps databases, tables, and server settings on startup.
+
+**Config resolution order:**
+1. `./db.toml` (CWD — project-local)
+2. `~/.dkdc/db/config.toml` (global fallback)
+
+Config is optional — if neither file exists, server behaves as before.
+
+**Bootstrap behavior:** additive-only, idempotent. Runs `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`. Never drops, alters, or migrates. Safe to call multiple times.
+
+**CLI commands:**
+- `db init` — generates a starter `db.toml` in CWD
+- `db bootstrap` — runs bootstrap from config without starting server
+- `db bootstrap --config path/to/config.toml` — bootstrap from a specific file
+- `db serve` — loads config (if present), bootstraps, then starts server
+
+**Server config in `db.toml`:** `[server]` section sets host/port. CLI flags (`--host`, `--port`) override config file values.
+
+**Config format:**
+```toml
+[server]
+host = "0.0.0.0"
+port = 4200
+
+[databases.mydb]
+[databases.mydb.tables.users]
+sql = "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)"
+[databases.mydb.tables.users.indexes]
+idx_name = "CREATE INDEX IF NOT EXISTS idx_name ON users (name)"
+```
+
 ### storage
 
 - `db serve` — multi-database server managing `~/.dkdc/db/`

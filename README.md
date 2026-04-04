@@ -42,6 +42,15 @@ You can use `uvx` to run it without installing:
 uvx --from dkdc-db db
 ```
 
+## Quickstart (config-driven)
+
+```bash
+cargo install dkdc-db-cli
+db init                    # creates db.toml with example config
+# edit db.toml to define your databases and tables
+db serve                   # bootstraps from config, starts server
+```
+
 ## Usage
 
 ### CLI
@@ -52,6 +61,9 @@ db status                  # Check server status
 db logs                    # View recent logs
 db attach                  # Attach to tmux session
 db stop                    # Stop server
+
+db init                    # Generate starter db.toml
+db bootstrap               # Bootstrap databases from config (no server)
 
 db create mydb             # Create a database
 db list                    # List databases

@@ -8,6 +8,7 @@ mod plan;
 mod provider;
 pub mod router;
 mod schema;
+pub mod toml_config;
 mod write;
 
 pub use config::DbConfig;

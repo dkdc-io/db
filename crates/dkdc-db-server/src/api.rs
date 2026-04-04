@@ -102,7 +102,8 @@ fn classify_error(e: &dkdc_db_core::Error) -> StatusCode {
         dkdc_db_core::Error::Turso(_)
         | dkdc_db_core::Error::DataFusion(_)
         | dkdc_db_core::Error::Arrow(_)
-        | dkdc_db_core::Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        | dkdc_db_core::Error::Io(_)
+        | dkdc_db_core::Error::Config(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
