@@ -30,3 +30,9 @@ tokio = { version = "1", features = ["full"], optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 dkdc-home = { version = "0.1", optional = true }
 anyhow = { version = "1", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+dkdc-db-core = { version = "0.1", path = "../dkdc-db-core" }
+dkdc-db-server = { version = "0.1", path = "../dkdc-db-server" }
+axum = { version = "0.8", features = ["json"] }
