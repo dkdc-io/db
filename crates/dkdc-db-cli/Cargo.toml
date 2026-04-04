@@ -1,6 +1,6 @@
 [package]
 name = "dkdc-db-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
@@ -17,9 +17,9 @@ name = "db"
 path = "src/main.rs"
 
 [dependencies]
-dkdc-db-client = { version = "0.1", path = "../dkdc-db-client", features = ["cli"] }
-dkdc-db-server = { version = "0.1", path = "../dkdc-db-server" }
-dkdc-db-core = { version = "0.1", path = "../dkdc-db-core" }
+dkdc-db-client = { version = "0.2", path = "../dkdc-db-client", features = ["cli"] }
+dkdc-db-server = { version = "0.2", path = "../dkdc-db-server" }
+dkdc-db-core = { version = "0.2", path = "../dkdc-db-core" }
 dkdc-home = "0.1"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }

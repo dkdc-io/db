@@ -1,6 +1,6 @@
 [package]
 name = "dkdc-db-client"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
@@ -33,6 +33,6 @@ anyhow = { version = "1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-dkdc-db-core = { version = "0.1", path = "../dkdc-db-core" }
-dkdc-db-server = { version = "0.1", path = "../dkdc-db-server" }
+dkdc-db-core = { version = "0.2", path = "../dkdc-db-core" }
+dkdc-db-server = { version = "0.2", path = "../dkdc-db-server" }
 axum = { version = "0.8", features = ["json"] }
