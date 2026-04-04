@@ -78,6 +78,9 @@ impl DbManager {
         // DataFusion has no deregister_catalog — replace with an empty catalog.
         self.ctx
             .register_catalog(catalog_name(name), Arc::new(MemoryCatalogProvider::new()));
+        // Remove from known list so list_dbs won't show it and ensure_db won't re-open it
+        let mut known = self.known.write().await;
+        known.retain(|k| k != name);
         Ok(())
     }
 
@@ -110,8 +113,12 @@ impl DbManager {
                 "database '{name}' not found — create it with POST /db"
             )));
         }
-        // Lazy open
-        self.create_db(name).await
+        // Lazy open — use create_db, but tolerate "already exists" from a concurrent ensure_db
+        match self.create_db(name).await {
+            Ok(()) => Ok(()),
+            Err(Error::Schema(msg)) if msg.contains("already exists") => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 
     /// Execute a write against a specific database.
@@ -143,6 +150,9 @@ impl DbManager {
     /// OLTP fast-path read against a specific database.
     pub async fn query_oltp(&self, db_name: &str, sql: &str) -> Result<Vec<RecordBatch>> {
         error::validate_sql(sql)?;
+        if router::is_write(sql) {
+            return Err(Error::WriteOnReadPath(sql.to_string()));
+        }
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
         dbs.get(db_name)

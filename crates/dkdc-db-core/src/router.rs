@@ -4,9 +4,11 @@ pub fn is_ddl(sql: &str) -> bool {
 }
 
 pub fn is_write(sql: &str) -> bool {
-    let upper = sql.trim_start().to_uppercase();
-    is_ddl(sql)
-        || upper.starts_with("INSERT")
+    if is_ddl(sql) {
+        return true;
+    }
+    let upper = strip_with_prefix(sql);
+    upper.starts_with("INSERT")
         || upper.starts_with("UPDATE")
         || upper.starts_with("DELETE")
         || upper.starts_with("REPLACE")
@@ -14,10 +16,61 @@ pub fn is_write(sql: &str) -> bool {
 
 pub fn is_read(sql: &str) -> bool {
     let upper = sql.trim_start().to_uppercase();
-    upper.starts_with("SELECT")
-        || upper.starts_with("EXPLAIN")
-        || upper.starts_with("PRAGMA")
-        || upper.starts_with("WITH")
+    if upper.starts_with("SELECT") || upper.starts_with("EXPLAIN") || upper.starts_with("PRAGMA") {
+        return true;
+    }
+    if upper.starts_with("WITH") {
+        // WITH ... INSERT/UPDATE/DELETE is a write
+        return !is_write(sql);
+    }
+    false
+}
+
+/// Strip leading WITH clause(s) and return the remaining SQL uppercased.
+/// Used to detect `WITH ... INSERT INTO ...` as a write.
+fn strip_with_prefix(sql: &str) -> String {
+    let upper = sql.trim_start().to_uppercase();
+    if !upper.starts_with("WITH") {
+        return upper;
+    }
+    // Find the final action keyword after WITH clause(s).
+    // CTEs are `WITH name AS (...)`, potentially nested parens.
+    // We scan past balanced parentheses to find the terminal statement.
+    let bytes = upper.as_bytes();
+    let mut i = 4; // skip "WITH"
+    loop {
+        // Skip to next open paren (the CTE body)
+        while i < bytes.len() && bytes[i] != b'(' {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
+        // Skip balanced parens
+        let mut depth = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'(' {
+                depth += 1;
+            } else if bytes[i] == b')' {
+                depth -= 1;
+                if depth == 0 {
+                    i += 1;
+                    break;
+                }
+            }
+            i += 1;
+        }
+        // After closing paren, skip whitespace and check for comma (another CTE) or keyword
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b',' {
+            i += 1; // skip comma, continue to next CTE
+            continue;
+        }
+        break;
+    }
+    upper[i..].trim_start().to_string()
 }
 
 #[cfg(test)]
@@ -49,6 +102,31 @@ mod tests {
         assert!(is_read("EXPLAIN SELECT * FROM t"));
         assert!(is_read("WITH cte AS (SELECT 1) SELECT * FROM cte"));
         assert!(!is_read("INSERT INTO t VALUES (1)"));
+        // WITH ... INSERT is a write, not a read
+        assert!(!is_read(
+            "WITH cte AS (SELECT 1 AS id) INSERT INTO t SELECT * FROM cte"
+        ));
+    }
+
+    #[test]
+    fn test_with_cte_write() {
+        assert!(is_write(
+            "WITH cte AS (SELECT 1 AS id) INSERT INTO t SELECT * FROM cte"
+        ));
+        assert!(is_write(
+            "WITH cte AS (SELECT 1) DELETE FROM t WHERE id IN (SELECT * FROM cte)"
+        ));
+        assert!(is_write(
+            "WITH cte AS (SELECT 1) UPDATE t SET x = 1 WHERE id IN (SELECT * FROM cte)"
+        ));
+        // WITH ... SELECT is not a write
+        assert!(!is_write(
+            "WITH cte AS (SELECT 1) SELECT * FROM cte"
+        ));
+        // Multiple CTEs
+        assert!(is_write(
+            "WITH a AS (SELECT 1), b AS (SELECT 2) INSERT INTO t SELECT * FROM a"
+        ));
     }
 
     #[test]
