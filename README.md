@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/dkdc-io/db/ci.yml?branch=main&label=CI)](https://github.com/dkdc-io/db/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8A2BE2.svg)](https://github.com/dkdc-io/db/blob/main/LICENSE)
 
-HTAP database system.
+HTAP database system. Built-in input validation, SQL safety checks (rejects stacked queries, `ATTACH DATABASE`, `LOAD_EXTENSION`), request size limits, structured tracing, and graceful shutdown.
 
 ## Install
 

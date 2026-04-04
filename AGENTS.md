@@ -95,6 +95,16 @@ bin/build-sdist        # build source distribution
 Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 Python checks: `ruff check`, `ruff format --check`, `ty check`, `pytest`
 
+## security
+
+- **Database name validation:** alphanumeric, hyphens, underscores, forward slashes; max 128 chars; rejects path traversal (`..`), leading `/` or `.`, double slashes
+- **Table name validation:** alphanumeric + underscores only; max 128 chars
+- **SQL safety checks:** rejects stacked queries (multiple statements), `ATTACH DATABASE`, and `LOAD_EXTENSION`
+- **SQL size limit:** 10 MB max per query
+- **Server body size limit:** 16 MB (axum `DefaultBodyLimit`)
+- **Request tracing:** structured logging via `tracing` crate — logs db operations, errors, and request lifecycle (`TraceLayer::new_for_http()`)
+- **Graceful shutdown:** handles SIGINT/SIGTERM via `tokio::select!`, allows in-flight requests to complete
+
 ## conventions
 
 - Rust stable toolchain (edition 2024)
