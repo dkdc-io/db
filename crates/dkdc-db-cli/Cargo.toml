@@ -8,6 +8,10 @@ description = "CLI for dkdc-db: bundles client + server into one binary"
 license = "MIT"
 repository = "https://github.com/dkdc-io/db"
 
+[lib]
+name = "dkdc_db_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "db"
 path = "src/main.rs"

@@ -7,7 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 usage() {
   echo "Usage: bin/bump-version [--major | --minor | --patch]"
   echo ""
-  echo "Bump the version across all Rust packages."
+  echo "Bump the version across all Rust and Python packages."
   echo "Default: --minor"
   exit "${1:-0}"
 }
@@ -39,24 +39,26 @@ BUMP="${BUMP:-minor}"
 # ---------- files ----------
 
 TOML_FILES=(
+  pyproject.toml
   crates/dkdc-db-core/Cargo.toml
   crates/dkdc-db-server/Cargo.toml
   crates/dkdc-db-client/Cargo.toml
   crates/dkdc-db-cli/Cargo.toml
+  crates/db-py/Cargo.toml
 )
 
 # ---------- read current version ----------
 
-CURRENT=$(grep -m1 '^version = ' "${TOML_FILES[0]}" | sed 's/version = "\(.*\)"/\1/')
+CURRENT=$(grep -m1 '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
 if [ -z "$CURRENT" ]; then
-  echo "ERROR: could not read version" >&2
+  echo "ERROR: could not read version from pyproject.toml" >&2
   exit 1
 fi
 
 for f in "${TOML_FILES[@]}"; do
   V=$(grep -m1 '^version = ' "$f" | sed 's/version = "\(.*\)"/\1/')
   if [ "$V" != "$CURRENT" ]; then
-    echo "ERROR: version mismatch: ${TOML_FILES[0]}=$CURRENT but $f=$V" >&2
+    echo "ERROR: version mismatch: pyproject.toml=$CURRENT but $f=$V" >&2
     exit 1
   fi
 done
@@ -95,11 +97,20 @@ for f in crates/dkdc-db-cli/Cargo.toml; do
   sed -i '' "s/dkdc-db-client = { version = \"$CURRENT\"/dkdc-db-client = { version = \"$NEW\"/" "$f"
   echo "  updated dep versions in $f"
 done
+for f in crates/db-py/Cargo.toml; do
+  sed -i '' "s/dkdc-db-client = { version = \"$CURRENT\"/dkdc-db-client = { version = \"$NEW\"/" "$f"
+  sed -i '' "s/dkdc-db-cli = { version = \"$CURRENT\"/dkdc-db-cli = { version = \"$NEW\"/" "$f"
+  echo "  updated dep versions in $f"
+done
 
 # ---------- regenerate lock files ----------
 
 echo "Regenerating lock files..."
 cargo generate-lockfile --quiet
 echo "  updated Cargo.lock"
+(cd crates/db-py && cargo generate-lockfile --quiet)
+echo "  updated crates/db-py/Cargo.lock"
+uv lock --quiet
+echo "  updated uv.lock"
 
 echo "Done! $CURRENT -> $NEW"

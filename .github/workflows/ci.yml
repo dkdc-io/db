@@ -10,4 +10,4 @@ jobs:
   check:
     uses: dkdc-io/.github/.github/workflows/check.yml@v1
     with:
-      python: false
+      python: true

@@ -11,6 +11,9 @@ crates/
   dkdc-db-client/     # library: HTTP client (reqwest) with same API shape
   dkdc-db-cli/        # binary "db": REPL + commands, uses client + dkdc-sh for tmux
   dkdc-db-bench/      # binary: network load testing (not published)
+  db-py/              # cdylib: PyO3 bindings wrapping client + CLI
+py/
+  dkdc_db/            # Python package: re-exports from _core + CLI entry point
 ```
 
 - `DbManager` is the top-level struct: owns a shared `SessionContext` + N `DkdcDb` instances
@@ -25,6 +28,7 @@ crates/
 - Schema auto-refreshes after DDL statements (via catalog refresh)
 - Per-request connections from `turso::Database` — supports concurrent reads
 - Lazy loading: on startup, server discovers `.db` files but doesn't open them until first access
+- Python bindings wrap `DbClient` (HTTP client) — async bridged via `tokio::runtime::Runtime::block_on()`
 
 ### storage
 
@@ -62,22 +66,34 @@ GET    /health                                      → { "status": "ok" }
 Database names map to DataFusion catalog names. Slashes become underscores (`project/mydb` → catalog `project_mydb`). Unqualified table names resolve against DataFusion's default catalog.
 
 Crates.io: `dkdc-db-core`, `dkdc-db-server`, `dkdc-db-client`, `dkdc-db-cli`.
+PyPI: `dkdc-db` (`from dkdc_db import Db`).
 Installed binaries: `db-server`, `db`.
+
+## install
+
+```bash
+curl -LsSf https://dkdc.sh/db/install.sh | sh   # recommended
+uv tool install dkdc-db                          # via uv
+cargo install dkdc-db-cli dkdc-db-server         # via cargo
+```
 
 ## development
 
 ```bash
-bin/setup              # install rustup if needed
-bin/build              # build Rust (bin/build-rs)
-bin/check              # lint + test (bin/check-rs)
-bin/format             # auto-format (bin/format-rs)
-bin/test               # run tests (bin/test-rs)
-bin/install            # install CLI + server locally
-bin/bump-version       # bump version across all crates (--major/--minor/--patch)
+bin/setup              # install rustup + uv if needed
+bin/build              # build Rust + Python (bin/build-rs, bin/build-py)
+bin/check              # lint + test (bin/check-rs, bin/check-py)
+bin/format             # auto-format (bin/format-rs, bin/format-py)
+bin/test               # run tests (bin/test-rs, bin/test-py)
+bin/install            # install CLI + Python locally (bin/install-rs, bin/install-py)
+bin/bump-version       # bump version across all crates + Python (--major/--minor/--patch)
 bin/release-crates-io  # publish all crates to crates.io
+bin/build-wheels       # build maturin wheels
+bin/build-sdist        # build source distribution
 ```
 
 Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
+Python checks: `ruff check`, `ruff format --check`, `ty check`, `pytest`
 
 ## conventions
 
@@ -89,3 +105,5 @@ Rust checks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 - All operations are db-scoped — writes target a specific database, reads can span databases
 - Cross-db join syntax: `SELECT * FROM db1.public.t1 JOIN db2.public.t2 ON ...`
 - Client requires server running; all access through HTTP API
+- Python bindings are synchronous (block_on async client) — matches other dkdc packages
+- `uv` for Python tooling; never use `python`/`pip` directly
