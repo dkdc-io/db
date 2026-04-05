@@ -81,7 +81,7 @@ pub async fn list_tables(conn: &turso::Connection) -> Result<Vec<String>> {
     let mut tables = Vec::new();
     while let Some(row) = rows.next().await? {
         let name: String = row.get(0)?;
-        tables.push(name);
+        tables.push(name.to_lowercase());
     }
     Ok(tables)
 }
