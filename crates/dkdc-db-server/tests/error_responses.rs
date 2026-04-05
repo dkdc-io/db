@@ -119,10 +119,9 @@ async fn table_schema_nonexistent_table() {
     // Schema for a table that doesn't exist — should return empty or succeed with 0 rows
     let result = client.table_schema("test", "nonexistent").await;
     // The PRAGMA table_info returns empty for nonexistent tables
-    match result {
-        Ok(resp) => assert!(resp.rows.is_empty()),
-        Err(_) => {} // either behavior is acceptable
-    }
+    if let Ok(resp) = result {
+        assert!(resp.rows.is_empty());
+    } // either empty result or error is acceptable
 }
 
 #[tokio::test]

@@ -156,8 +156,10 @@ fn column_value_to_json(col: &dyn arrow::array::Array, row: usize) -> serde_json
         let bytes = arr.value(row);
         serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(bytes))
     } else {
-        // Fallback: try to format as string
-        serde_json::Value::String(format!("{:?}", col))
+        // Fallback: format the specific row value using Arrow's display
+        let s = arrow::util::display::array_value_to_string(col, row)
+            .unwrap_or_else(|_| format!("{:?}", col.slice(row, 1)));
+        serde_json::Value::String(s)
     }
 }
 

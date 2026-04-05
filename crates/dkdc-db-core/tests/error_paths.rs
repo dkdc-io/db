@@ -29,8 +29,9 @@ async fn table_schema_nonexistent_table() {
     mgr.create_db("test").await.unwrap();
     let result = mgr.table_schema("test", "nonexistent").await;
     // PRAGMA table_info returns empty for nonexistent tables -> empty batch
-    // The exact behavior depends on turso; just verify no panic
-    assert!(result.is_ok() || result.is_err());
+    let batches = result.unwrap();
+    let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    assert_eq!(total_rows, 0, "nonexistent table should return zero rows");
 }
 
 #[tokio::test]

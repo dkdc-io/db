@@ -15,7 +15,7 @@ required-features = ["cli"]
 
 [features]
 default = []
-cli = ["dep:clap", "dep:rustyline", "dep:tokio", "dep:tracing-subscriber", "dep:dkdc-home", "dep:anyhow"]
+cli = ["dep:clap", "dep:rustyline", "dep:tokio", "dep:tracing-subscriber", "dep:dkdc-home", "dep:anyhow", "dep:dkdc-db-core"]
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json"] }
@@ -30,6 +30,7 @@ tokio = { version = "1", features = ["full"], optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 dkdc-home = { version = "0.1", optional = true }
 anyhow = { version = "1", optional = true }
+dkdc-db-core = { version = "0.2", path = "../dkdc-db-core", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }

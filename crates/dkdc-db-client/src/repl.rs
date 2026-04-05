@@ -74,17 +74,10 @@ pub async fn run(client: &DbClient, initial_db: Option<&str>) -> anyhow::Result<
 }
 
 async fn execute_sql(sql: &str, client: &DbClient, current_db: &Option<String>) {
-    let upper = sql.trim_start().to_uppercase();
-    let is_write = upper.starts_with("INSERT")
-        || upper.starts_with("UPDATE")
-        || upper.starts_with("DELETE")
-        || upper.starts_with("CREATE")
-        || upper.starts_with("ALTER")
-        || upper.starts_with("DROP")
-        || upper.starts_with("REPLACE")
-        || upper.starts_with("BEGIN")
-        || upper.starts_with("COMMIT")
-        || upper.starts_with("ROLLBACK");
+    let is_write = dkdc_db_core::router::is_write(sql) || {
+        let upper = sql.trim_start().to_uppercase();
+        upper.starts_with("BEGIN") || upper.starts_with("COMMIT") || upper.starts_with("ROLLBACK")
+    };
 
     if is_write {
         let Some(db) = current_db else {
