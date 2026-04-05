@@ -63,7 +63,7 @@ pub fn validate_db_name(name: &str) -> Result<()> {
             "database name may only contain alphanumeric characters, hyphens, underscores, and forward slashes".into(),
         ));
     }
-    if name.starts_with('/') || name.ends_with('/') || name.contains("//") {
+    if name.ends_with('/') || name.contains("//") {
         return Err(Error::Validation(
             "database name has invalid slash placement".into(),
         ));

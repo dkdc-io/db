@@ -92,7 +92,7 @@ async fn float_column_with_text_value() {
     mgr.execute("test", "CREATE TABLE t (val REAL)")
         .await
         .unwrap();
-    mgr.execute("test", "INSERT INTO t VALUES ('2.718')")
+    mgr.execute("test", "INSERT INTO t VALUES ('2.72')")
         .await
         .unwrap();
     mgr.execute("test", "INSERT INTO t VALUES ('abc')")
@@ -105,7 +105,7 @@ async fn float_column_with_text_value() {
         .as_any()
         .downcast_ref::<Float64Array>()
         .unwrap();
-    assert!((arr.value(0) - 2.718).abs() < f64::EPSILON);
+    assert!((arr.value(0) - 2.72).abs() < f64::EPSILON);
     assert!((arr.value(1) - 0.0).abs() < f64::EPSILON);
 }
 

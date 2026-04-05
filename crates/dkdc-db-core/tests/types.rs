@@ -21,7 +21,7 @@ async fn all_sqlite_types_roundtrip_through_arrow() {
 
     mgr.execute(
         "test",
-        "INSERT INTO type_test VALUES (42, 3.14, 'hello', X'DEADBEEF', NULL)",
+        "INSERT INTO type_test VALUES (42, 3.15, 'hello', X'DEADBEEF', NULL)",
     )
     .await
     .unwrap();
@@ -56,7 +56,7 @@ async fn all_sqlite_types_roundtrip_through_arrow() {
         .as_any()
         .downcast_ref::<arrow::array::Float64Array>()
         .unwrap();
-    assert!((real_arr.value(0) - 3.14).abs() < f64::EPSILON);
+    assert!((real_arr.value(0) - 3.15).abs() < f64::EPSILON);
 
     let text_arr = batch
         .column(2)
