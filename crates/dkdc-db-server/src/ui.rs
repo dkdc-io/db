@@ -293,6 +293,7 @@ fn escape_html(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
 }
 
 // ---------------------------------------------------------------------------
@@ -360,9 +361,15 @@ fn onboarding_welcome() -> Html<String> {
 }
 
 async fn onboarding_create_table(
-    State(_mgr): State<AppState>,
+    State(mgr): State<AppState>,
     Path(name): Path<String>,
-) -> Html<String> {
+) -> Response {
+    // Validate database exists before showing the create-table form
+    let dbs = mgr.list_dbs().await;
+    if !dbs.contains(&name) {
+        return Redirect::to("/ui").into_response();
+    }
+
     let n = escape_html(&name);
     let content = format!(
         r##"<div class="onboard" style="max-width:600px">
@@ -419,7 +426,7 @@ async fn onboarding_create_table(
 </div>"##,
         n = n,
     );
-    layout("Create Table", &content, "")
+    layout("Create Table", &content, "").into_response()
 }
 
 async fn onboarding_insert(State(mgr): State<AppState>, Path(name): Path<String>) -> Html<String> {
@@ -497,7 +504,7 @@ async fn database_view(State(mgr): State<AppState>, Path(name): Path<String>) ->
     let mut table_rows = String::new();
     for table_name in &tables {
         let row_count = mgr
-            .query_oltp(&name, &format!("SELECT COUNT(*) FROM {}", table_name))
+            .query_oltp(&name, &format!("SELECT COUNT(*) FROM \"{}\"", table_name))
             .await
             .ok()
             .and_then(|batches| {
@@ -605,6 +612,18 @@ async fn table_view(
     let db = escape_html(&db_name);
     let tbl = escape_html(&table_name);
 
+    // Validate table_name exists in this database before using it in SQL
+    let valid_tables = mgr.list_tables(&db_name).await.unwrap_or_default();
+    if !valid_tables.contains(&table_name) {
+        let content = format!(
+            r##"<div class="alert alert-error">Table not found: {tbl}</div>
+<a href="/ui/db/{db}">&larr; Back to database</a>"##,
+            tbl = tbl,
+            db = db,
+        );
+        return layout("Error", &content, "dashboard").into_response();
+    }
+
     // Schema
     let schema_html = match mgr.table_schema(&db_name, &table_name).await {
         Ok(batches) => {
@@ -637,7 +656,10 @@ async fn table_view(
 
     // Data (first 100 rows)
     let data_html = match mgr
-        .query_oltp(&db_name, &format!("SELECT * FROM {} LIMIT 100", table_name))
+        .query_oltp(
+            &db_name,
+            &format!("SELECT * FROM \"{}\" LIMIT 100", table_name),
+        )
         .await
     {
         Ok(batches) => {
