@@ -129,16 +129,17 @@ impl DbManager {
     pub async fn execute(&self, db_name: &str, sql: &str) -> Result<u64> {
         error::validate_sql(sql)?;
         self.ensure_db(db_name).await?;
-        let dbs = self.dbs.read().await;
-        let managed = dbs.get(db_name).ok_or_else(|| db_not_found(db_name))?;
-        let result = managed.db.execute(sql).await?;
+        let (result, catalog, is_ddl) = {
+            let dbs = self.dbs.read().await;
+            let managed = dbs.get(db_name).ok_or_else(|| db_not_found(db_name))?;
+            let result = managed.db.execute(sql).await?;
+            let catalog = managed.catalog.clone();
+            let is_ddl = router::is_ddl(sql);
+            (result, catalog, is_ddl)
+        }; // read lock released here
         // Refresh catalog if DDL (selective: only the affected table)
-        if router::is_ddl(sql) {
-            managed
-                .catalog
-                .schema_provider()
-                .refresh_for_ddl(sql)
-                .await?;
+        if is_ddl {
+            catalog.schema_provider().refresh_for_ddl(sql).await?;
         }
         Ok(result)
     }
