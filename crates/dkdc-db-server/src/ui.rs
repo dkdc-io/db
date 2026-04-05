@@ -78,6 +78,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .data-table th { background: var(--bg2); font-weight: 600; color: var(--fg2); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; position: sticky; top: 0; }
 .data-table tr:hover td { background: var(--bg2); }
 .data-table td { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
 .query-area { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 0.9rem; padding: 12px; }
 .query-bar { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
@@ -308,17 +309,39 @@ async fn dashboard(State(mgr): State<AppState>) -> Response {
 
     let mut cards = String::new();
     for db_name in &dbs {
-        let table_count = mgr.list_tables(db_name).await.map(|t| t.len()).unwrap_or(0);
+        let tables = mgr.list_tables(db_name).await.unwrap_or_default();
+        let table_count = tables.len();
+        let mut total_rows: i64 = 0;
+        for t in &tables {
+            total_rows += mgr
+                .query_oltp(db_name, &format!("SELECT COUNT(*) FROM {}", t))
+                .await
+                .ok()
+                .and_then(|batches| {
+                    batches.first().filter(|b| b.num_rows() > 0).map(|b| {
+                        use arrow::array::Int64Array;
+                        b.column(0)
+                            .as_any()
+                            .downcast_ref::<Int64Array>()
+                            .map(|a| a.value(0))
+                            .unwrap_or(0)
+                    })
+                })
+                .unwrap_or(0);
+        }
         let name_escaped = escape_html(db_name);
-        let plural = if table_count == 1 { "" } else { "s" };
+        let t_plural = if table_count == 1 { "" } else { "s" };
+        let r_plural = if total_rows == 1 { "" } else { "s" };
         cards.push_str(&format!(
             r##"<a href="/ui/db/{name}" class="card">
   <h3>{name}</h3>
-  <p>{count} table{plural}</p>
+  <p>{tcount} table{tp}, {rcount} row{rp}</p>
 </a>"##,
             name = name_escaped,
-            count = table_count,
-            plural = plural,
+            tcount = table_count,
+            tp = t_plural,
+            rcount = total_rows,
+            rp = r_plural,
         ));
     }
 
@@ -643,18 +666,32 @@ async fn table_view(
         Ok(batches) => {
             let resp = crate::api::batches_to_response(&batches);
             if resp.rows.is_empty() {
-                String::from(r##"<div class="empty">No rows yet.</div>"##)
+                r##"<div class="empty">No data yet — <a href="#insertrow">insert some rows</a></div>"##.to_string()
             } else {
+                let num_cols: Vec<bool> = resp
+                    .columns
+                    .iter()
+                    .map(|c| is_numeric_type(&c.r#type))
+                    .collect();
                 let headers: String = resp
                     .columns
                     .iter()
-                    .map(|c| format!("<th>{}</th>", escape_html(&c.name)))
+                    .zip(num_cols.iter())
+                    .map(|(c, &is_num)| {
+                        let cls = if is_num { " class=\"num\"" } else { "" };
+                        format!("<th{cls}>{}</th>", escape_html(&c.name), cls = cls)
+                    })
                     .collect();
                 let mut rows = String::new();
                 for row in &resp.rows {
                     rows.push_str("<tr>");
-                    for val in row {
-                        rows.push_str(&format!("<td>{}</td>", escape_html(&format_value(val))));
+                    for (val, &is_num) in row.iter().zip(num_cols.iter()) {
+                        let cls = if is_num { " class=\"num\"" } else { "" };
+                        rows.push_str(&format!(
+                            "<td{cls}>{}</td>",
+                            escape_html(&format_value(val)),
+                            cls = cls,
+                        ));
                     }
                     rows.push_str("</tr>");
                 }
@@ -695,7 +732,7 @@ async fn table_view(
   <h3 style="font-size:0.95rem;margin-bottom:8px">Data</h3>
   {data_html}
 </div>
-<div class="section">
+<div class="section" id="insertrow">
   <div class="section-header"><h2>Insert Row</h2></div>
   <form hx-post="/ui/api/execute/{db}" hx-target="#insertresult" hx-swap="innerHTML">
     <div class="form-group">
@@ -914,12 +951,21 @@ fn render_query_results(batches: &[dkdc_db_core::RecordBatch]) -> Html<String> {
         ));
     }
 
+    let numeric_cols: Vec<bool> = resp
+        .columns
+        .iter()
+        .map(|c| is_numeric_type(&c.r#type))
+        .collect();
+
     let headers: String = resp
         .columns
         .iter()
-        .map(|c| {
+        .zip(numeric_cols.iter())
+        .map(|(c, &is_num)| {
+            let cls = if is_num { " class=\"num\"" } else { "" };
             format!(
-                r##"<th>{name} <span class="badge">{ty}</span></th>"##,
+                r##"<th{cls}>{name} <span class="badge">{ty}</span></th>"##,
+                cls = cls,
                 name = escape_html(&c.name),
                 ty = escape_html(&c.r#type),
             )
@@ -929,8 +975,13 @@ fn render_query_results(batches: &[dkdc_db_core::RecordBatch]) -> Html<String> {
     let mut rows = String::new();
     for row in &resp.rows {
         rows.push_str("<tr>");
-        for val in row {
-            rows.push_str(&format!("<td>{}</td>", escape_html(&format_value(val))));
+        for (val, &is_num) in row.iter().zip(numeric_cols.iter()) {
+            let cls = if is_num { " class=\"num\"" } else { "" };
+            rows.push_str(&format!(
+                "<td{cls}>{}</td>",
+                escape_html(&format_value(val)),
+                cls = cls,
+            ));
         }
         rows.push_str("</tr>");
     }
@@ -950,6 +1001,32 @@ fn render_query_results(batches: &[dkdc_db_core::RecordBatch]) -> Html<String> {
         headers = headers,
         rows = rows,
     ))
+}
+
+fn is_numeric_type(ty: &str) -> bool {
+    let t = ty.to_uppercase();
+    matches!(
+        t.as_str(),
+        "INTEGER"
+            | "INT"
+            | "REAL"
+            | "FLOAT"
+            | "DOUBLE"
+            | "NUMERIC"
+            | "DECIMAL"
+            | "BIGINT"
+            | "INT8"
+            | "INT16"
+            | "INT32"
+            | "INT64"
+            | "UINT8"
+            | "UINT16"
+            | "UINT32"
+            | "UINT64"
+            | "FLOAT16"
+            | "FLOAT32"
+            | "FLOAT64"
+    )
 }
 
 fn format_value(val: &serde_json::Value) -> String {
