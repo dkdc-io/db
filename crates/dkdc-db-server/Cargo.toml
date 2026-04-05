@@ -1,6 +1,6 @@
 [package]
 name = "dkdc-db-server"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85.0"
 authors = ["Cody <cody@dkdc.io>"]
@@ -9,7 +9,7 @@ license = "MIT"
 repository = "https://github.com/dkdc-io/db"
 
 [dependencies]
-dkdc-db-core = { version = "0.2", path = "../dkdc-db-core" }
+dkdc-db-core = { version = "0.3", path = "../dkdc-db-core" }
 axum = { version = "0.8", features = ["json"] }
 tokio = { version = "1", features = ["net", "signal", "macros", "time"] }
 tower-http = { version = "0.6", features = ["trace"] }
@@ -20,5 +20,5 @@ arrow = "58"
 base64 = "0.22"
 
 [dev-dependencies]
-dkdc-db-client = { version = "0.2", path = "../dkdc-db-client" }
+dkdc-db-client = { version = "0.3", path = "../dkdc-db-client" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
