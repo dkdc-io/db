@@ -7,6 +7,10 @@ use crate::router;
 use crate::schema;
 use crate::write::WriteEngine;
 
+const IN_MEMORY_PATH: &str = ":memory:";
+const WAL_MODE_PRAGMA: &str = "journal_mode";
+const WAL_MODE_VALUE: &str = "'wal'";
+
 /// Try to extract a table name from a simple SELECT query for PRAGMA fallback.
 /// Handles `SELECT ... FROM table_name` patterns.
 fn extract_table_name(sql: &str) -> Option<String> {
@@ -19,6 +23,12 @@ fn extract_table_name(sql: &str) -> Option<String> {
         .take_while(|c| c.is_alphanumeric() || *c == '_')
         .collect();
     if name.is_empty() { None } else { Some(name) }
+}
+
+/// Enable WAL mode on a connection for concurrent read+write.
+async fn enable_wal(conn: &turso::Connection) -> Result<()> {
+    conn.pragma_update(WAL_MODE_PRAGMA, WAL_MODE_VALUE).await?;
+    Ok(())
 }
 
 pub struct DkdcDb {
@@ -40,9 +50,7 @@ impl DkdcDb {
             .await?;
 
         let write_conn = db.connect()?;
-
-        // Enable WAL mode for concurrent read+write
-        write_conn.pragma_update("journal_mode", "'wal'").await?;
+        enable_wal(&write_conn).await?;
 
         let write = WriteEngine::new(write_conn);
 
@@ -52,11 +60,9 @@ impl DkdcDb {
     /// Open an in-memory database (for testing).
     /// Turso connections from the same Database share the same in-memory data.
     pub async fn open_in_memory() -> Result<Self> {
-        let db = turso::Builder::new_local(":memory:").build().await?;
+        let db = turso::Builder::new_local(IN_MEMORY_PATH).build().await?;
         let write_conn = db.connect()?;
-
-        // Enable WAL mode
-        write_conn.pragma_update("journal_mode", "'wal'").await?;
+        enable_wal(&write_conn).await?;
 
         let write = WriteEngine::new(write_conn);
 

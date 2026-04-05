@@ -76,7 +76,7 @@ impl DbManager {
     pub async fn drop_db(&self, name: &str) -> Result<()> {
         let mut dbs = self.dbs.write().await;
         if dbs.remove(name).is_none() {
-            return Err(Error::Schema(format!("database '{name}' not found")));
+            return Err(db_not_found(name));
         }
         // DataFusion has no deregister_catalog — replace with an empty catalog.
         self.ctx
@@ -116,6 +116,7 @@ impl DbManager {
                 "database '{name}' not found — create it with POST /db"
             )));
         }
+
         // Lazy open — use create_db, but tolerate "already exists" from a concurrent ensure_db
         match self.create_db(name).await {
             Ok(()) => Ok(()),
@@ -129,9 +130,7 @@ impl DbManager {
         error::validate_sql(sql)?;
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
-        let managed = dbs
-            .get(db_name)
-            .ok_or_else(|| Error::Schema(format!("database '{db_name}' not found")))?;
+        let managed = dbs.get(db_name).ok_or_else(|| db_not_found(db_name))?;
         let result = managed.db.execute(sql).await?;
         // Refresh catalog if DDL (selective: only the affected table)
         if router::is_ddl(sql) {
@@ -163,7 +162,7 @@ impl DbManager {
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
         dbs.get(db_name)
-            .ok_or_else(|| Error::Schema(format!("database '{db_name}' not found")))?
+            .ok_or_else(|| db_not_found(db_name))?
             .db
             .query_oltp(sql)
             .await
@@ -174,7 +173,7 @@ impl DbManager {
         self.ensure_db(db_name).await?;
         let dbs = self.dbs.read().await;
         dbs.get(db_name)
-            .ok_or_else(|| Error::Schema(format!("database '{db_name}' not found")))?
+            .ok_or_else(|| db_not_found(db_name))?
             .db
             .list_tables()
             .await
@@ -188,7 +187,7 @@ impl DbManager {
         // Table name is validated above (alphanumeric + underscores only), safe for interpolation
         let sql = format!("SELECT name, type FROM pragma_table_info('{table}')");
         dbs.get(db_name)
-            .ok_or_else(|| Error::Schema(format!("database '{db_name}' not found")))?
+            .ok_or_else(|| db_not_found(db_name))?
             .db
             .query_oltp(&sql)
             .await
@@ -239,6 +238,11 @@ impl DbManager {
         catalog.schema_provider().refresh().await?;
         Ok(ManagedDb { db, catalog })
     }
+}
+
+/// Return a "database not found" schema error.
+fn db_not_found(db_name: &str) -> Error {
+    Error::Schema(format!("database '{db_name}' not found"))
 }
 
 /// Map database name to catalog name. Slashes become underscores

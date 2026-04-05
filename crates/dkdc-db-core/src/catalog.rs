@@ -11,6 +11,8 @@ use crate::error::Result;
 use crate::provider::SqliteTableProvider;
 use crate::schema;
 
+const DEFAULT_SCHEMA: &str = "public";
+
 /// One catalog per database. Contains a single "public" schema.
 pub struct SqliteCatalogProvider {
     schema: Arc<SqliteSchemaProvider>,
@@ -40,12 +42,12 @@ impl CatalogProvider for SqliteCatalogProvider {
     }
 
     fn schema_names(&self) -> Vec<String> {
-        vec!["public".to_string()]
+        vec![DEFAULT_SCHEMA.to_string()]
     }
 
     fn schema(&self, name: &str) -> Option<Arc<dyn SchemaProvider>> {
         match name {
-            "public" => Some(self.schema.clone()),
+            DEFAULT_SCHEMA => Some(self.schema.clone()),
             _ => None,
         }
     }
