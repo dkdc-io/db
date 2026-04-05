@@ -66,8 +66,7 @@ async fn setup_multi_table(size: usize) -> DbManager {
 
     // Insert regions
     mgr.execute("bench", "BEGIN").await.unwrap();
-    for i in 0..10 {
-        let name = REGIONS[i];
+    for (i, name) in REGIONS.iter().enumerate() {
         mgr.execute(
             "bench",
             &format!("INSERT INTO regions VALUES ({i}, '{name}', 'US')"),

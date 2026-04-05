@@ -1,7 +1,7 @@
 #[cfg(feature = "cli")]
 pub mod repl;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -74,12 +74,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(())
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response_unit(resp).await
     }
 
     /// Drop a database.
@@ -90,12 +85,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(())
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response_unit(resp).await
     }
 
     /// List all databases.
@@ -106,12 +96,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(resp.json().await?)
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response(resp).await
     }
 
     /// Execute a write statement against a specific database.
@@ -125,13 +110,8 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            let body: ExecuteResponse = resp.json().await?;
-            Ok(body.affected)
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        let body: ExecuteResponse = self.handle_response(resp).await?;
+        Ok(body.affected)
     }
 
     /// Analytical query through DataFusion. Supports cross-db joins.
@@ -145,12 +125,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(resp.json().await?)
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response(resp).await
     }
 
     /// OLTP fast-path read against a specific database.
@@ -164,12 +139,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(resp.json().await?)
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response(resp).await
     }
 
     /// List tables in a specific database.
@@ -180,12 +150,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(resp.json().await?)
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response(resp).await
     }
 
     /// Get table schema for a specific database.
@@ -196,12 +161,7 @@ impl DbClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(resp.json().await?)
-        } else {
-            let body: ErrorResponse = resp.json().await?;
-            Err(Error::Server(body.error))
-        }
+        self.handle_response(resp).await
     }
 
     /// Health check.
@@ -212,5 +172,27 @@ impl DbClient {
             .send()
             .await?;
         Ok(resp.status().is_success())
+    }
+
+    // -- internal --
+
+    /// Deserialize a successful JSON response or extract the server error.
+    async fn handle_response<T: DeserializeOwned>(&self, resp: reqwest::Response) -> Result<T> {
+        if resp.status().is_success() {
+            Ok(resp.json().await?)
+        } else {
+            let body: ErrorResponse = resp.json().await?;
+            Err(Error::Server(body.error))
+        }
+    }
+
+    /// Check for success on responses with no meaningful body.
+    async fn handle_response_unit(&self, resp: reqwest::Response) -> Result<()> {
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            let body: ErrorResponse = resp.json().await?;
+            Err(Error::Server(body.error))
+        }
     }
 }
