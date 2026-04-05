@@ -18,3 +18,12 @@ pub use manager::DbManager;
 
 pub use arrow::record_batch::RecordBatch;
 pub use datafusion::dataframe::DataFrame;
+
+/// Default host for the database server.
+pub const DEFAULT_HOST: &str = "127.0.0.1";
+
+/// Default port for the database server.
+pub const DEFAULT_PORT: u16 = 4200;
+
+/// Default server URL (`http://{DEFAULT_HOST}:{DEFAULT_PORT}`).
+pub const DEFAULT_SERVER_URL: &str = "http://127.0.0.1:4200";

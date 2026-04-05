@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 pub const TMUX_SESSION: &str = "dkdc-db";
+const DEFAULT_LOG_LINES: usize = 50;
 
 #[derive(Parser)]
 #[command(name = "db", about = "dkdc-db: HTAP database")]
@@ -14,11 +15,11 @@ pub enum Commands {
     /// Start the database server (in tmux)
     Serve {
         /// Host to bind to
-        #[arg(long, default_value = "127.0.0.1")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_HOST)]
         host: String,
 
         /// Port to bind to
-        #[arg(long, default_value_t = 4200)]
+        #[arg(long, default_value_t = dkdc_db_core::DEFAULT_PORT)]
         port: u16,
 
         /// Run in foreground (skip tmux)
@@ -30,7 +31,7 @@ pub enum Commands {
     /// Show database server status
     Status {
         /// Port to check
-        #[arg(long, default_value_t = 4200)]
+        #[arg(long, default_value_t = dkdc_db_core::DEFAULT_PORT)]
         port: u16,
     },
     /// Attach to database server tmux session
@@ -38,7 +39,7 @@ pub enum Commands {
     /// Show recent logs from tmux session
     Logs {
         /// Number of lines to show
-        #[arg(short, long, default_value_t = 50)]
+        #[arg(short, long, default_value_t = DEFAULT_LOG_LINES)]
         lines: usize,
     },
     /// Generate a starter db.toml in the current directory
@@ -55,7 +56,7 @@ pub enum Commands {
         #[arg()]
         name: String,
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
     },
     /// Drop a database
@@ -64,13 +65,13 @@ pub enum Commands {
         #[arg()]
         name: String,
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
     },
     /// Interactive SQL REPL
     Repl {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Initial database to use
         #[arg(long)]
@@ -79,7 +80,7 @@ pub enum Commands {
     /// Execute a read query and print results
     Query {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Database for OLTP query (omit for global analytical)
         #[arg(long)]
@@ -90,7 +91,7 @@ pub enum Commands {
     /// Execute a write statement
     Execute {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Target database (required)
         #[arg(long)]
@@ -101,7 +102,7 @@ pub enum Commands {
     /// List tables in a database
     Tables {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Database name (required)
         #[arg(long)]
@@ -110,7 +111,7 @@ pub enum Commands {
     /// List databases
     List {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
     },
 }

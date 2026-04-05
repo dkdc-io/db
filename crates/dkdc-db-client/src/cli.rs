@@ -12,7 +12,7 @@ pub enum Commands {
     /// Interactive SQL REPL
     Repl {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Initial database to use
         #[arg(long)]
@@ -21,7 +21,7 @@ pub enum Commands {
     /// Execute a read query and print results
     Query {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Database for OLTP query (omit for global analytical)
         #[arg(long)]
@@ -32,7 +32,7 @@ pub enum Commands {
     /// Execute a write statement
     Execute {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Target database (required)
         #[arg(long)]
@@ -43,7 +43,7 @@ pub enum Commands {
     /// List tables in a database
     Tables {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
         /// Database name (required)
         #[arg(long)]
@@ -52,7 +52,7 @@ pub enum Commands {
     /// List databases
     List {
         /// Server URL
-        #[arg(long, default_value = "http://127.0.0.1:4200")]
+        #[arg(long, default_value = dkdc_db_core::DEFAULT_SERVER_URL)]
         url: String,
     },
 }

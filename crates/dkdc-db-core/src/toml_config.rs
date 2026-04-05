@@ -30,11 +30,11 @@ impl Default for ServerConfig {
 }
 
 fn default_host() -> String {
-    "127.0.0.1".to_string()
+    crate::DEFAULT_HOST.to_string()
 }
 
 fn default_port() -> u16 {
-    4200
+    crate::DEFAULT_PORT
 }
 
 #[derive(Debug, Deserialize, Default)]
