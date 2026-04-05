@@ -1877,7 +1877,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-bench"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "axum",
  "dkdc-db-client",
@@ -1889,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-cli"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1905,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-client"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1924,7 +1924,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-core"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "arrow",
  "async-trait",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-server"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "arrow",
  "axum",
@@ -2930,9 +2930,9 @@ dependencies = [
 
 [[package]]
 name = "liblzma-sys"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f2db66f3268487b5033077f266da6777d057949b8f93c8ad82e441df25e6186"
+checksum = "1a60851d15cd8c5346eca4ab8babff585be2ae4bc8097c067291d3ffe2add3b6"
 dependencies = [
  "cc",
  "libc",
