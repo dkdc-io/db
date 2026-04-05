@@ -9,7 +9,7 @@ use dkdc_db_core::DbManager;
 pub async fn serve(manager: Arc<DbManager>, host: &str, port: u16) -> std::io::Result<()> {
     let app = api::routes()
         .merge(ui::ui_routes())
-        .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024))
+        .layer(axum::extract::DefaultBodyLimit::max(api::MAX_BODY_SIZE))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(axum::middleware::from_fn(api::timeout_middleware))
         .with_state(manager);

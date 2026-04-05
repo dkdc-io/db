@@ -54,12 +54,16 @@ async fn async_main() -> anyhow::Result<()> {
                 // Apply server config (CLI flags override config file)
                 let (effective_host, effective_port) = match &config {
                     Some(c) => {
-                        let h = if host != "127.0.0.1" {
+                        let h = if host != dkdc_db_core::DEFAULT_HOST {
                             host.clone()
                         } else {
                             c.server.host.clone()
                         };
-                        let p = if port != 4200 { port } else { c.server.port };
+                        let p = if port != dkdc_db_core::DEFAULT_PORT {
+                            port
+                        } else {
+                            c.server.port
+                        };
                         (h, p)
                     }
                     None => (host.clone(), port),

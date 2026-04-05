@@ -15,6 +15,8 @@ use crate::error::{self, Error, Result};
 use crate::router;
 use crate::toml_config::DbTomlConfig;
 
+const IN_MEMORY_PATH: &str = ":memory:";
+
 struct ManagedDb {
     db: DkdcDb,
     catalog: Arc<SqliteCatalogProvider>,
@@ -51,7 +53,7 @@ impl DbManager {
             ctx: SessionContext::new(),
             dbs: RwLock::new(HashMap::new()),
             known: RwLock::new(Vec::new()),
-            base_path: PathBuf::from(":memory:"),
+            base_path: PathBuf::from(IN_MEMORY_PATH),
         })
     }
 
@@ -226,7 +228,7 @@ impl DbManager {
     // -- internal --
 
     async fn open_db(&self, name: &str) -> Result<ManagedDb> {
-        let is_memory = self.base_path.to_string_lossy() == ":memory:";
+        let is_memory = self.base_path.to_string_lossy() == IN_MEMORY_PATH;
         let db = if is_memory {
             DkdcDb::open_in_memory().await?
         } else {

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
 
 /// Max request body size: 16 MB
-const MAX_BODY_SIZE: usize = 16 * 1024 * 1024;
+pub const MAX_BODY_SIZE: usize = 16 * 1024 * 1024;
 
 /// Request timeout
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
