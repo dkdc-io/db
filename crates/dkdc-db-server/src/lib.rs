@@ -1,4 +1,5 @@
 pub mod api;
+pub mod ui;
 
 use std::sync::Arc;
 
@@ -6,7 +7,12 @@ use dkdc_db_core::DbManager;
 
 /// Start the server on the given address with graceful shutdown on SIGINT/SIGTERM.
 pub async fn serve(manager: Arc<DbManager>, host: &str, port: u16) -> std::io::Result<()> {
-    let app = api::router(manager);
+    let app = api::routes()
+        .merge(ui::ui_routes())
+        .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(api::timeout_middleware))
+        .with_state(manager);
 
     let addr = format!("{host}:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;

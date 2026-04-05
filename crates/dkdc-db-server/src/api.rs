@@ -19,6 +19,15 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 type AppState = Arc<DbManager>;
 
 pub fn router(state: AppState) -> Router {
+    routes()
+        .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
+        .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(timeout_middleware))
+        .with_state(state)
+}
+
+/// Raw API routes without middleware/state — used by serve() to compose with UI.
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/db", post(create_db))
         .route("/db", get(list_dbs))
@@ -29,13 +38,9 @@ pub fn router(state: AppState) -> Router {
         .route("/db/{name}/schema/{table}", get(table_schema))
         .route("/query", post(query))
         .route("/health", get(health))
-        .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
-        .layer(TraceLayer::new_for_http())
-        .layer(axum::middleware::from_fn(timeout_middleware))
-        .with_state(state)
 }
 
-async fn timeout_middleware(
+pub async fn timeout_middleware(
     req: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> impl IntoResponse {
@@ -65,15 +70,15 @@ struct ExecuteResponse {
 }
 
 #[derive(Serialize)]
-struct QueryResponse {
-    columns: Vec<ColumnInfo>,
-    rows: Vec<Vec<serde_json::Value>>,
+pub struct QueryResponse {
+    pub columns: Vec<ColumnInfo>,
+    pub rows: Vec<Vec<serde_json::Value>>,
 }
 
 #[derive(Serialize)]
-struct ColumnInfo {
-    name: String,
-    r#type: String,
+pub struct ColumnInfo {
+    pub name: String,
+    pub r#type: String,
 }
 
 #[derive(Serialize)]
@@ -107,7 +112,7 @@ fn classify_error(e: &dkdc_db_core::Error) -> StatusCode {
     }
 }
 
-fn batches_to_response(batches: &[dkdc_db_core::RecordBatch]) -> QueryResponse {
+pub fn batches_to_response(batches: &[dkdc_db_core::RecordBatch]) -> QueryResponse {
     let mut columns = Vec::new();
     let mut rows = Vec::new();
 
