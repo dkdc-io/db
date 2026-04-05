@@ -1889,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1905,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-client"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -1924,7 +1924,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "arrow",
  "async-trait",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "dkdc-db-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "arrow",
  "axum",
@@ -2064,9 +2064,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+checksum = "a043dc74da1e37d6afe657061213aa6f425f855399a11d3463c6ecccc4dfda1f"
 
 [[package]]
 name = "fd-lock"

@@ -1,6 +1,6 @@
 [project]
 name = "dkdc-db"
-version = "0.2.0"
+version = "0.2.1"
 description = "HTAP embedded database"
 authors = [{ name = "Cody", email = "cody@dkdc.io" }]
 requires-python = ">=3.11"
