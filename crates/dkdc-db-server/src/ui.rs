@@ -888,7 +888,7 @@ async fn api_drop_db(State(mgr): State<AppState>, Path(name): Path<String>) -> R
             let mut response = Html(String::new()).into_response();
             response
                 .headers_mut()
-                .insert("HX-Redirect", http::HeaderValue::from_static("/ui"));
+                .insert("HX-Redirect", axum::http::HeaderValue::from_static("/ui"));
             response
         }
         Err(e) => Html(format!(
