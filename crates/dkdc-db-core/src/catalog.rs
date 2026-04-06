@@ -229,7 +229,8 @@ fn extract_name_token(s: &str) -> Option<String> {
         if ch == '"' || ch == '`' || ch == '\'' {
             // Quoted segment: read until matching close quote
             let quote = ch;
-            result.push(chars.next().unwrap());
+            chars.next(); // consume the opening quote (peeked above)
+            result.push(quote);
             loop {
                 let c = chars.next()?; // unclosed quote → None
                 result.push(c);
@@ -241,7 +242,8 @@ fn extract_name_token(s: &str) -> Option<String> {
             // End of name token
             break;
         } else {
-            result.push(chars.next().unwrap());
+            // Safe: peek() confirmed a char exists above
+            result.push(chars.next().expect("peeked char"));
         }
     }
 
