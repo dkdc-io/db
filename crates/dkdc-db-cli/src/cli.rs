@@ -4,7 +4,7 @@ pub const TMUX_SESSION: &str = "dkdc-db";
 const DEFAULT_LOG_LINES: usize = 50;
 
 #[derive(Parser)]
-#[command(name = "db", about = "dkdc-db: HTAP database")]
+#[command(name = "db", version, about = "dkdc-db: HTAP embedded database")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
