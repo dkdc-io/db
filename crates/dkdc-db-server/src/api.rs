@@ -112,6 +112,30 @@ fn classify_error(e: &dkdc_db_core::Error) -> StatusCode {
     }
 }
 
+/// Return a user-safe error message, hiding internal details for server errors.
+///
+/// User-facing errors (Validation, Schema, WriteOnReadPath, ReadOnWritePath) are
+/// returned as-is since they contain information the caller needs to fix their request.
+/// Internal errors (Turso, DataFusion, Arrow, Io, Config) are replaced with a generic
+/// message — the full error is already logged server-side via tracing::warn.
+fn sanitize_error(e: &dkdc_db_core::Error) -> String {
+    match e {
+        dkdc_db_core::Error::Validation(msg) => format!("validation error: {msg}"),
+        dkdc_db_core::Error::WriteOnReadPath(msg) => {
+            format!("write attempted through read path: {msg}")
+        }
+        dkdc_db_core::Error::ReadOnWritePath(msg) => {
+            format!("read attempted through write path: {msg}")
+        }
+        dkdc_db_core::Error::Schema(msg) => format!("schema error: {msg}"),
+        dkdc_db_core::Error::Turso(_)
+        | dkdc_db_core::Error::DataFusion(_)
+        | dkdc_db_core::Error::Arrow(_)
+        | dkdc_db_core::Error::Io(_)
+        | dkdc_db_core::Error::Config(_) => "internal server error".to_string(),
+    }
+}
+
 pub fn batches_to_response(batches: &[dkdc_db_core::RecordBatch]) -> QueryResponse {
     let mut columns = Vec::new();
     let mut rows = Vec::new();
@@ -183,7 +207,7 @@ async fn create_db(
         }
         Err(e) => {
             tracing::warn!(db = %req.name, error = %e, "create_db failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
@@ -196,7 +220,7 @@ async fn drop_db(State(mgr): State<AppState>, Path(name): Path<String>) -> impl 
         }
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "drop_db failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
@@ -218,7 +242,7 @@ async fn execute(
         }
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "execute failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
@@ -228,7 +252,7 @@ async fn query(State(mgr): State<AppState>, Json(req): Json<SqlRequest>) -> impl
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => {
             tracing::warn!(error = %e, "query failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
@@ -242,7 +266,7 @@ async fn query_oltp(
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "query_oltp failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
@@ -252,7 +276,7 @@ async fn list_tables(State(mgr): State<AppState>, Path(name): Path<String>) -> i
         Ok(tables) => (StatusCode::OK, Json(tables)).into_response(),
         Err(e) => {
             tracing::warn!(db = %name, error = %e, "list_tables failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
@@ -265,7 +289,7 @@ async fn table_schema(
         Ok(batches) => (StatusCode::OK, Json(batches_to_response(&batches))).into_response(),
         Err(e) => {
             tracing::warn!(db = %name, table = %table, error = %e, "table_schema failed");
-            error_response(classify_error(&e), e).into_response()
+            error_response(classify_error(&e), sanitize_error(&e)).into_response()
         }
     }
 }
