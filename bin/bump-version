@@ -44,6 +44,7 @@ TOML_FILES=(
   crates/dkdc-db-server/Cargo.toml
   crates/dkdc-db-client/Cargo.toml
   crates/dkdc-db-cli/Cargo.toml
+  crates/dkdc-db-bench/Cargo.toml
   crates/db-py/Cargo.toml
 )
 
